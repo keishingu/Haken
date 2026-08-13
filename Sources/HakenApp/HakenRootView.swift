@@ -143,7 +143,7 @@ private struct SettingsView: View {
             get: { model.configuration.launchAtLogin }, set: { model.setLaunchAtLogin($0) }
           ))
         Picker(
-          "Failure feedback",
+          "Switch feedback",
           selection: Binding(
             get: { model.configuration.feedbackMode }, set: { model.setFeedbackMode($0) }
           )

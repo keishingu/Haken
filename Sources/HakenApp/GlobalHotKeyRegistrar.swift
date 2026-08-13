@@ -1,22 +1,27 @@
 import Carbon
 import HakenCore
+import OSLog
 
 enum GlobalHotKeyRegistrarError: Error {
   case registrationFailed(SlotKey, OSStatus)
+  case eventHandlerInstallationFailed(OSStatus)
 }
 
 final class GlobalHotKeyRegistrar {
   private static let signature: OSType = 0x4841_4B4E  // HAKN
   private var eventHandler: EventHandlerRef?
+  private var handlerInstallationStatus: OSStatus = noErr
   private var refs: [SlotKey: EventHotKeyRef] = [:]
   private var slotsByID: [UInt32: SlotKey] = [:]
   private var onPress: ((SlotKey) -> Void)?
+  private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.haken.app", category: "hotkey")
 
   init() {
     var spec = EventTypeSpec(
       eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-    let status = InstallEventHandler(
-      GetEventDispatcherTarget(),
+    handlerInstallationStatus = InstallEventHandler(
+      GetApplicationEventTarget(),
       { _, event, userData in
         guard let userData else { return noErr }
         let registrar = Unmanaged<GlobalHotKeyRegistrar>.fromOpaque(userData).takeUnretainedValue()
@@ -25,7 +30,7 @@ final class GlobalHotKeyRegistrar {
       },
       1, &spec, Unmanaged.passUnretained(self).toOpaque(), &eventHandler
     )
-    if status != noErr { eventHandler = nil }
+    if handlerInstallationStatus != noErr { eventHandler = nil }
   }
 
   deinit {
@@ -39,6 +44,13 @@ final class GlobalHotKeyRegistrar {
   {
     self.onPress = onPress
     var errors: [SlotKey: HakenError] = [:]
+    guard handlerInstallationStatus == noErr else {
+      for slot in slots { errors[slot] = .hotKeyRegistrationFailed(slot) }
+      logger.error(
+        "Hot key handler installation failed status=\(self.handlerInstallationStatus, privacy: .public)"
+      )
+      return errors
+    }
     let additions = slots.subtracting(Set(refs.keys))
     var newlyRegistered: [SlotKey] = []
     for slot in additions {
@@ -65,12 +77,18 @@ final class GlobalHotKeyRegistrar {
     let identifier = EventHotKeyID(signature: Self.signature, id: UInt32(slot.rawValue))
     var reference: EventHotKeyRef?
     let status = RegisterEventHotKey(
-      slot.virtualKeyCode, UInt32(optionKey), identifier, GetEventDispatcherTarget(),
+      slot.virtualKeyCode, UInt32(optionKey), identifier, GetApplicationEventTarget(),
       OptionBits(kEventHotKeyExclusive), &reference
     )
     guard status == noErr, let reference else {
+      logger.error(
+        "Hot key registration failed slot=\(slot.rawValue, privacy: .public) status=\(status, privacy: .public)"
+      )
       throw GlobalHotKeyRegistrarError.registrationFailed(slot, status)
     }
+    logger.info(
+      "Hot key registered slot=\(slot.rawValue, privacy: .public) keyCode=\(slot.virtualKeyCode, privacy: .public)"
+    )
     refs[slot] = reference
     slotsByID[identifier.id] = slot
   }
@@ -91,6 +109,7 @@ final class GlobalHotKeyRegistrar {
       ) == noErr, identifier.signature == Self.signature, let slot = slotsByID[identifier.id]
     else { return }
     // Carbon callback only resolves the slot. Switching is intentionally delivered outside it.
+    logger.info("Hot key received slot=\(slot.rawValue, privacy: .public)")
     DispatchQueue.main.async { [weak self] in self?.onPress?(slot) }
   }
 }

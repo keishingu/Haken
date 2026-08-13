@@ -16,16 +16,18 @@ struct ApplicationDescriptor: Identifiable, Hashable {
 
 final class ApplicationAdapter: @unchecked Sendable {
   func activate(_ target: ApplicationTarget) -> Result<SwitchOutcome, HakenError> {
-    if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == target.bundleIdentifier {
+    let running = runningApplications(matching: target)
+    if frontmostProcessIdentifier().map({ processIdentifier in
+      running.contains { $0.processIdentifier == processIdentifier }
+    }) == true {
       return .success(.alreadyActive)
     }
-    let running = NSWorkspace.shared.runningApplications.filter {
-      $0.bundleIdentifier == target.bundleIdentifier
-    }
+
     if let application = running.first {
-      application.activate()
-      return .success(
-        waitForFrontmost(bundleIdentifier: target.bundleIdentifier) ? .verified : .requestAccepted)
+      guard activate(application) else { return .failure(.applicationActivationFailed) }
+      return waitForFrontmost(application: application, timeout: 1.5)
+        ? .success(.verified)
+        : .failure(.applicationActivationFailed)
     }
 
     guard let url = resolveURL(for: target) else { return .failure(.applicationNotFound) }
@@ -34,17 +36,20 @@ final class ApplicationAdapter: @unchecked Sendable {
     var launched: NSRunningApplication?
     let configuration = NSWorkspace.OpenConfiguration()
     configuration.activates = true
-    NSWorkspace.shared.openApplication(at: url, configuration: configuration) {
-      application, error in
-      launched = application
-      launchError = error
-      semaphore.signal()
+    onMain {
+      NSWorkspace.shared.openApplication(at: url, configuration: configuration) {
+        application, error in
+        launched = application
+        launchError = error
+        semaphore.signal()
+      }
     }
     _ = semaphore.wait(timeout: .now() + 2)
     if launchError != nil { return .failure(.applicationLaunchFailed) }
-    guard launched != nil else { return .failure(.applicationLaunchFailed) }
-    return .success(
-      waitForFrontmost(bundleIdentifier: target.bundleIdentifier) ? .verified : .requestAccepted)
+    guard let launched else { return .failure(.applicationLaunchFailed) }
+    return waitForFrontmost(application: launched, timeout: 4.0)
+      ? .success(.verified)
+      : .failure(.applicationActivationFailed)
   }
 
   func runningAndInstalledApplications() -> [ApplicationDescriptor] {
@@ -98,17 +103,53 @@ final class ApplicationAdapter: @unchecked Sendable {
       let url = URL(fileURLWithPath: path)
       if Bundle(url: url)?.bundleIdentifier == target.bundleIdentifier { return url }
     }
-    return NSWorkspace.shared.urlForApplication(withBundleIdentifier: target.bundleIdentifier)
+    return onMain {
+      NSWorkspace.shared.urlForApplication(withBundleIdentifier: target.bundleIdentifier)
+    }
   }
 
-  private func waitForFrontmost(bundleIdentifier: String) -> Bool {
-    let deadline = Date().addingTimeInterval(0.35)
+  private func runningApplications(matching target: ApplicationTarget) -> [NSRunningApplication] {
+    let applications = onMain {
+      NSWorkspace.shared.runningApplications.filter {
+        $0.bundleIdentifier == target.bundleIdentifier && !$0.isTerminated
+      }
+    }
+    guard let path = target.lastKnownPath else { return applications }
+    let expectedURL = URL(fileURLWithPath: path).standardizedFileURL
+    return applications.sorted {
+      let leftMatches = $0.bundleURL?.standardizedFileURL == expectedURL
+      let rightMatches = $1.bundleURL?.standardizedFileURL == expectedURL
+      return leftMatches && !rightMatches
+    }
+  }
+
+  private func waitForFrontmost(application: NSRunningApplication, timeout: TimeInterval) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
     while Date() < deadline {
-      if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleIdentifier {
+      let processIdentifier = application.processIdentifier
+      if processIdentifier > 0, frontmostProcessIdentifier() == processIdentifier {
         return true
       }
       Thread.sleep(forTimeInterval: 0.025)
     }
     return false
+  }
+
+  private func activate(_ application: NSRunningApplication) -> Bool {
+    onMain {
+      // This is deliberately not a window selector: it activates the application as a whole.
+      guard !application.isTerminated else { return false }
+      _ = application.unhide()
+      return application.activate(options: [.activateAllWindows])
+    }
+  }
+
+  private func frontmostProcessIdentifier() -> pid_t? {
+    onMain { NSWorkspace.shared.frontmostApplication?.processIdentifier }
+  }
+
+  private func onMain<T>(_ operation: @escaping () -> T) -> T {
+    if Thread.isMainThread { return operation() }
+    return DispatchQueue.main.sync(execute: operation)
   }
 }

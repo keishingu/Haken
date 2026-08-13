@@ -21,6 +21,7 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
     subsystem: Bundle.main.bundleIdentifier ?? "com.haken.app", category: "lifecycle")
   private let chromeAdapter: ChromeProfileAdapter
   private let coordinator: SwitchCoordinator
+  private let hud = SwitchHUDController()
 
   init() {
     let store = HakenConfigurationStore()
@@ -192,5 +193,8 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
   private func record(_ result: SwitchResult) {
     recentResults.insert(result, at: 0)
     recentResults = Array(recentResults.prefix(20))
+    if configuration.feedbackMode == .hud, let slot = result.slot {
+      hud.present(result: result, target: configuration.target(for: slot))
+    }
   }
 }
