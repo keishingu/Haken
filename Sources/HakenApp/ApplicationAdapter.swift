@@ -1,0 +1,114 @@
+import AppKit
+import HakenCore
+
+struct ApplicationDescriptor: Identifiable, Hashable {
+  let bundleIdentifier: String
+  let displayName: String
+  let url: URL
+
+  var id: String { "\(bundleIdentifier)|\(url.path)" }
+
+  func target() -> ApplicationTarget {
+    ApplicationTarget(
+      bundleIdentifier: bundleIdentifier, displayName: displayName, lastKnownPath: url.path)
+  }
+}
+
+final class ApplicationAdapter: @unchecked Sendable {
+  func activate(_ target: ApplicationTarget) -> Result<SwitchOutcome, HakenError> {
+    if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == target.bundleIdentifier {
+      return .success(.alreadyActive)
+    }
+    let running = NSWorkspace.shared.runningApplications.filter {
+      $0.bundleIdentifier == target.bundleIdentifier
+    }
+    if let application = running.first {
+      application.activate()
+      return .success(
+        waitForFrontmost(bundleIdentifier: target.bundleIdentifier) ? .verified : .requestAccepted)
+    }
+
+    guard let url = resolveURL(for: target) else { return .failure(.applicationNotFound) }
+    let semaphore = DispatchSemaphore(value: 0)
+    var launchError: Error?
+    var launched: NSRunningApplication?
+    let configuration = NSWorkspace.OpenConfiguration()
+    configuration.activates = true
+    NSWorkspace.shared.openApplication(at: url, configuration: configuration) {
+      application, error in
+      launched = application
+      launchError = error
+      semaphore.signal()
+    }
+    _ = semaphore.wait(timeout: .now() + 2)
+    if launchError != nil { return .failure(.applicationLaunchFailed) }
+    guard launched != nil else { return .failure(.applicationLaunchFailed) }
+    return .success(
+      waitForFrontmost(bundleIdentifier: target.bundleIdentifier) ? .verified : .requestAccepted)
+  }
+
+  func runningAndInstalledApplications() -> [ApplicationDescriptor] {
+    var candidates: [String: ApplicationDescriptor] = [:]
+    for application in NSWorkspace.shared.runningApplications {
+      if let descriptor = descriptor(application)?.1 {
+        candidates[descriptor.id] = descriptor
+      }
+    }
+    for root in [
+      URL(fileURLWithPath: "/Applications"),
+      FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications"),
+    ] {
+      guard
+        let contents = try? FileManager.default.contentsOfDirectory(
+          at: root, includingPropertiesForKeys: nil)
+      else { continue }
+      for url in contents where url.pathExtension == "app" {
+        if let descriptor = descriptor(for: url) { candidates[descriptor.id] = descriptor }
+      }
+    }
+    return candidates.values.sorted {
+      $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+    }
+  }
+
+  func descriptor(for url: URL) -> ApplicationDescriptor? {
+    guard url.pathExtension == "app", let bundle = Bundle(url: url),
+      let identifier = bundle.bundleIdentifier
+    else { return nil }
+    return ApplicationDescriptor(
+      bundleIdentifier: identifier,
+      displayName: bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+        ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String
+        ?? url.deletingPathExtension().lastPathComponent,
+      url: url
+    )
+  }
+
+  private func descriptor(_ application: NSRunningApplication) -> (String, ApplicationDescriptor)? {
+    guard let identifier = application.bundleIdentifier, let url = application.bundleURL else {
+      return nil
+    }
+    let descriptor = ApplicationDescriptor(
+      bundleIdentifier: identifier, displayName: application.localizedName ?? identifier, url: url)
+    return (descriptor.id, descriptor)
+  }
+
+  private func resolveURL(for target: ApplicationTarget) -> URL? {
+    if let path = target.lastKnownPath {
+      let url = URL(fileURLWithPath: path)
+      if Bundle(url: url)?.bundleIdentifier == target.bundleIdentifier { return url }
+    }
+    return NSWorkspace.shared.urlForApplication(withBundleIdentifier: target.bundleIdentifier)
+  }
+
+  private func waitForFrontmost(bundleIdentifier: String) -> Bool {
+    let deadline = Date().addingTimeInterval(0.35)
+    while Date() < deadline {
+      if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleIdentifier {
+        return true
+      }
+      Thread.sleep(forTimeInterval: 0.025)
+    }
+    return false
+  }
+}
