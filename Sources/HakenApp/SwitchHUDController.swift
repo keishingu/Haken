@@ -1,137 +1,174 @@
 import AppKit
 import HakenCore
 
-/// A non-activating, all-Spaces switch confirmation panel using macOS glass materials.
+/// An app-switcher-style panel that previews every assigned shortcut while Option is held.
 final class SwitchHUDController {
+  private enum Layout {
+    static let iconSide: CGFloat = 68
+    static let tileWidth: CGFloat = 108
+    static let tileHeight: CGFloat = 140
+    static let tileSpacing: CGFloat = 10
+    static let glassContentInset: CGFloat = 12
+    static let panelInset: CGFloat = 18
+  }
+
   private let panel: NSWindow
-  private let keyLabel = NSTextField(labelWithString: "")
-  private let iconView = NSImageView()
-  private let titleLabel = NSTextField(labelWithString: "")
-  private let detailLabel = NSTextField(labelWithString: "")
-  private let accentView = NSVisualEffectView()
-  private var dismissal: DispatchWorkItem?
+  private var isPresented = false
 
   init() {
     panel = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 480, height: 164),
+      contentRect: .zero,
       styleMask: .borderless,
       backing: .buffered,
       defer: false
     )
     panel.isOpaque = false
     panel.backgroundColor = .clear
-    panel.hasShadow = true
+    panel.hasShadow = false
     panel.level = .floating
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
     panel.isMovableByWindowBackground = false
     panel.hidesOnDeactivate = false
     panel.ignoresMouseEvents = true
+    panel.isReleasedWhenClosed = false
+    panel.setAccessibilityLabel("Haken shortcuts")
+  }
 
-    let material = NSVisualEffectView()
-    material.material = .hudWindow
-    material.blendingMode = .behindWindow
-    material.state = .active
-    material.wantsLayer = true
-    material.layer?.cornerRadius = 28
-    material.layer?.masksToBounds = true
-
-    accentView.material = .underWindowBackground
-    accentView.blendingMode = .withinWindow
-    accentView.state = .active
-    accentView.wantsLayer = true
-    accentView.layer?.cornerRadius = 38
-    accentView.layer?.opacity = 0.5
-
-    keyLabel.alignment = .center
-    keyLabel.font = .monospacedSystemFont(ofSize: 38, weight: .medium)
-    keyLabel.textColor = .labelColor
-    keyLabel.wantsLayer = true
-    keyLabel.layer?.cornerRadius = 18
-    keyLabel.layer?.borderWidth = 1
-    keyLabel.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.7).cgColor
-    keyLabel.layer?.backgroundColor =
-      NSColor.controlBackgroundColor
-      .withAlphaComponent(0.48)
-      .cgColor
-
-    iconView.imageScaling = .scaleProportionallyUpOrDown
-    iconView.wantsLayer = true
-    iconView.layer?.cornerRadius = 18
-    iconView.layer?.masksToBounds = true
-
-    titleLabel.font = .systemFont(ofSize: 24, weight: .semibold)
-    titleLabel.lineBreakMode = .byTruncatingTail
-    detailLabel.font = .systemFont(ofSize: 14, weight: .medium)
-    detailLabel.textColor = .secondaryLabelColor
-    detailLabel.lineBreakMode = .byTruncatingTail
-
-    let textStack = NSStackView(views: [titleLabel, detailLabel])
-    textStack.orientation = .vertical
-    textStack.alignment = .leading
-    textStack.spacing = 5
-    textStack.translatesAutoresizingMaskIntoConstraints = false
-
-    for view in [accentView, keyLabel, iconView, textStack] {
-      view.translatesAutoresizingMaskIntoConstraints = false
-      material.addSubview(view)
+  func present(slots: [HakenSlot], shortcutStyle: ShortcutStyle) {
+    let assignedSlots = slots.filter { $0.target != nil }
+    guard !assignedSlots.isEmpty else {
+      dismiss()
+      return
     }
-    panel.contentView = material
+
+    let stack = NSStackView(
+      views: assignedSlots.map { makeSlotContent(for: $0, shortcutStyle: shortcutStyle) })
+    stack.orientation = .horizontal
+    stack.alignment = .centerY
+    stack.distribution = .fill
+    stack.spacing = Layout.tileSpacing
+    stack.edgeInsets = NSEdgeInsets(
+      top: Layout.glassContentInset,
+      left: Layout.glassContentInset,
+      bottom: Layout.glassContentInset,
+      right: Layout.glassContentInset
+    )
+
+    let glass = makeGlassView(containing: stack)
+    let root = NSView()
+    root.addSubview(glass)
+    glass.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
-      accentView.widthAnchor.constraint(equalToConstant: 112),
-      accentView.heightAnchor.constraint(equalToConstant: 112),
-      accentView.centerXAnchor.constraint(equalTo: iconView.centerXAnchor),
-      accentView.centerYAnchor.constraint(equalTo: iconView.centerYAnchor),
-
-      keyLabel.leadingAnchor.constraint(equalTo: material.leadingAnchor, constant: 24),
-      keyLabel.centerYAnchor.constraint(equalTo: material.centerYAnchor),
-      keyLabel.widthAnchor.constraint(equalToConstant: 100),
-      keyLabel.heightAnchor.constraint(equalToConstant: 92),
-
-      iconView.leadingAnchor.constraint(equalTo: keyLabel.trailingAnchor, constant: 24),
-      iconView.centerYAnchor.constraint(equalTo: material.centerYAnchor),
-      iconView.widthAnchor.constraint(equalToConstant: 76),
-      iconView.heightAnchor.constraint(equalToConstant: 76),
-
-      textStack.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 18),
-      textStack.trailingAnchor.constraint(equalTo: material.trailingAnchor, constant: -28),
-      textStack.centerYAnchor.constraint(equalTo: material.centerYAnchor),
+      glass.leadingAnchor.constraint(
+        equalTo: root.leadingAnchor, constant: Layout.panelInset),
+      glass.trailingAnchor.constraint(
+        equalTo: root.trailingAnchor, constant: -Layout.panelInset),
+      glass.topAnchor.constraint(equalTo: root.topAnchor, constant: Layout.panelInset),
+      glass.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -Layout.panelInset),
     ])
-  }
+    panel.contentView = root
 
-  func present(result: SwitchResult, target: SwitchTarget?) {
-    guard let slot = result.slot else { return }
-    dismissal?.cancel()
-
-    keyLabel.stringValue = slot.displayValue
-    titleLabel.stringValue = target?.displayName ?? "Haken"
-    detailLabel.stringValue = detail(for: result)
-    detailLabel.textColor = result.error == nil ? NSColor.systemBlue : NSColor.systemRed
-
-    let image = icon(for: target)
-    iconView.image = image
-    accentView.layer?.backgroundColor =
-      accentColor(for: image, failed: result.error != nil)
-      .withAlphaComponent(0.35)
-      .cgColor
-
-    panel.alphaValue = 1
+    let count = CGFloat(assignedSlots.count)
+    let contentWidth = count * Layout.tileWidth + max(0, count - 1) * Layout.tileSpacing
+    panel.setContentSize(
+      NSSize(
+        width: contentWidth + Layout.glassContentInset * 2 + Layout.panelInset * 2,
+        height: Layout.tileHeight + Layout.glassContentInset * 2 + Layout.panelInset * 2
+      ))
     centerPanel()
-    panel.orderFrontRegardless()
 
-    let delay = result.error == nil ? 1.4 : 3.0
-    let work = DispatchWorkItem { [weak self] in self?.dismiss() }
-    dismissal = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    if !isPresented {
+      panel.alphaValue = 0
+      panel.orderFrontRegardless()
+      NSAnimationContext.runAnimationGroup { context in
+        context.duration = 0.12
+        context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        panel.animator().alphaValue = 1
+      }
+    }
+    isPresented = true
   }
 
-  private func dismiss() {
+  func dismiss() {
+    guard isPresented else { return }
+    isPresented = false
     NSAnimationContext.runAnimationGroup { context in
-      context.duration = 0.2
+      context.duration = 0.12
       context.timingFunction = CAMediaTimingFunction(name: .easeIn)
       panel.animator().alphaValue = 0
     } completionHandler: { [weak panel] in
       panel?.orderOut(nil)
     }
+  }
+
+  private func makeSlotContent(for slot: HakenSlot, shortcutStyle: ShortcutStyle) -> NSView {
+    guard let target = slot.target else { return NSView() }
+
+    let iconView = NSImageView(image: icon(for: target))
+    iconView.imageScaling = .scaleProportionallyUpOrDown
+    iconView.translatesAutoresizingMaskIntoConstraints = false
+    iconView.setContentHuggingPriority(.required, for: .vertical)
+    NSLayoutConstraint.activate([
+      iconView.widthAnchor.constraint(equalToConstant: Layout.iconSide),
+      iconView.heightAnchor.constraint(equalToConstant: Layout.iconSide),
+    ])
+
+    let displayName = hudDisplayName(for: target)
+    let nameLabel = NSTextField(labelWithString: displayName)
+    nameLabel.alignment = .center
+    nameLabel.font = .systemFont(ofSize: 13, weight: .medium)
+    nameLabel.lineBreakMode = .byTruncatingTail
+    nameLabel.maximumNumberOfLines = 1
+    nameLabel.textColor = .labelColor
+
+    let shortcut = shortcutStyle.displayValue(for: slot.id)
+    let shortcutLabel = NSTextField(labelWithString: shortcut)
+    shortcutLabel.alignment = .center
+    shortcutLabel.font = .monospacedSystemFont(ofSize: 14, weight: .semibold)
+    shortcutLabel.textColor = .secondaryLabelColor
+
+    let content = NSStackView(views: [iconView, nameLabel, shortcutLabel])
+    content.orientation = .vertical
+    content.alignment = .centerX
+    content.spacing = 6
+    content.edgeInsets = NSEdgeInsets(top: 13, left: 10, bottom: 11, right: 10)
+    content.setCustomSpacing(9, after: iconView)
+    content.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      content.widthAnchor.constraint(equalToConstant: Layout.tileWidth),
+      content.heightAnchor.constraint(equalToConstant: Layout.tileHeight),
+    ])
+    content.setAccessibilityElement(true)
+    content.setAccessibilityLabel("\(displayName), \(shortcut)")
+
+    return content
+  }
+
+  private func makeGlassView(containing content: NSView) -> NSView {
+    if #available(macOS 26.0, *) {
+      let glass = NSGlassEffectView()
+      // The entire shortcut row is one content view so AppKit renders one continuous lens.
+      glass.contentView = content
+      glass.style = .clear
+      glass.cornerRadius = 30
+      return glass
+    }
+
+    let fallback = NSVisualEffectView()
+    fallback.material = .hudWindow
+    fallback.blendingMode = .behindWindow
+    fallback.state = .active
+    fallback.wantsLayer = true
+    fallback.layer?.cornerRadius = 30
+    fallback.layer?.masksToBounds = true
+    fallback.addSubview(content)
+    NSLayoutConstraint.activate([
+      content.leadingAnchor.constraint(equalTo: fallback.leadingAnchor),
+      content.trailingAnchor.constraint(equalTo: fallback.trailingAnchor),
+      content.topAnchor.constraint(equalTo: fallback.topAnchor),
+      content.bottomAnchor.constraint(equalTo: fallback.bottomAnchor),
+    ])
+    return fallback
   }
 
   private func centerPanel() {
@@ -142,21 +179,10 @@ final class SwitchHUDController {
       NSPoint(
         x: visibleFrame.midX - panel.frame.width / 2,
         y: visibleFrame.midY - panel.frame.height / 2
-      )
-    )
+      ))
   }
 
-  private func detail(for result: SwitchResult) -> String {
-    if let error = result.error { return error.userMessage }
-    return switch result.outcome {
-    case .verified: "Activated · \(result.durationMilliseconds) ms"
-    case .alreadyActive: "Already active"
-    case .requestAccepted: "Switch request accepted · \(result.durationMilliseconds) ms"
-    case .failed, .ignored: result.summary
-    }
-  }
-
-  private func icon(for target: SwitchTarget?) -> NSImage? {
+  private func icon(for target: SwitchTarget) -> NSImage {
     switch target {
     case .application(let target):
       if let path = target.lastKnownPath,
@@ -175,45 +201,16 @@ final class SwitchHUDController {
       ) {
         return NSWorkspace.shared.icon(forFile: chrome.path)
       }
-    case nil: break
     }
     return NSImage(
-      systemSymbolName: "arrow.left.arrow.right.circle.fill",
-      accessibilityDescription: "Haken"
-    )
+      systemSymbolName: "app.fill", accessibilityDescription: target.displayName
+    ) ?? NSImage()
   }
 
-  private func accentColor(for image: NSImage?, failed: Bool) -> NSColor {
-    if failed { return .systemRed }
-    guard let image, let color = image.averageColor else { return .systemBlue }
-    return color.blended(withFraction: 0.45, of: .systemBlue) ?? .systemBlue
-  }
-}
-
-extension NSImage {
-  fileprivate var averageColor: NSColor? {
-    guard let tiff = tiffRepresentation,
-      let bitmap = NSBitmapImageRep(data: tiff)
-    else { return nil }
-    guard let image = CIImage(bitmapImageRep: bitmap) else { return nil }
-    let filter = CIFilter(name: "CIAreaAverage")
-    filter?.setValue(image, forKey: kCIInputImageKey)
-    filter?.setValue(CIVector(cgRect: image.extent), forKey: kCIInputExtentKey)
-    guard let output = filter?.outputImage else { return nil }
-    var pixel = [UInt8](repeating: 0, count: 4)
-    CIContext(options: nil).render(
-      output,
-      toBitmap: &pixel,
-      rowBytes: 4,
-      bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-      format: .RGBA8,
-      colorSpace: CGColorSpaceCreateDeviceRGB()
-    )
-    return NSColor(
-      red: CGFloat(pixel[0]) / 255,
-      green: CGFloat(pixel[1]) / 255,
-      blue: CGFloat(pixel[2]) / 255,
-      alpha: 1
-    )
+  private func hudDisplayName(for target: SwitchTarget) -> String {
+    switch target {
+    case .application(let application): application.displayName
+    case .chromeProfile(let profile): profile.profileName
+    }
   }
 }

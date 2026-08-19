@@ -7,11 +7,25 @@ struct HakenCoreTests {
   @Test func slotOrderAndKeyCodesAreStable() {
     #expect(SlotKey.displayOrder.map(\.rawValue) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 0])
     #expect(SlotKey.zero.virtualKeyCode == 29)
+    #expect(SlotKey.zero.functionVirtualKeyCode == 109)
     #expect(SlotKey.one.displayValue == "⌥1")
+    #expect(ShortcutStyle.optionFunction.displayValue(for: .one) == "⌥F1")
+    #expect(ShortcutStyle.commandFunction.displayValue(for: .two) == "⌘F2")
+    #expect(ShortcutStyle.function.displayValue(for: .zero) == "F10")
+  }
+
+  @Test func legacyConfigurationDefaultsToOptionNumberShortcuts() throws {
+    let data = Data(
+      """
+      {"schemaVersion":1,"isEnabled":true,"launchAtLogin":false,"slots":[],"feedbackMode":"menuBar","developerMode":false}
+      """.utf8)
+    let configuration = try JSONDecoder().decode(HakenConfiguration.self, from: data)
+    #expect(configuration.shortcutStyle == .optionNumber)
   }
 
   @Test func targetsRoundTripThroughConfiguration() throws {
     var configuration = HakenConfiguration()
+    configuration.shortcutStyle = .commandFunction
     configuration.setTarget(
       .application(
         ApplicationTarget(
@@ -27,6 +41,7 @@ struct HakenCoreTests {
     let decoded = try JSONDecoder().decode(
       HakenConfiguration.self, from: JSONEncoder().encode(configuration))
     #expect(decoded == configuration)
+    #expect(decoded.shortcutStyle == .commandFunction)
     #expect(decoded.usesChromeProfiles)
   }
 

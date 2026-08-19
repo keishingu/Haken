@@ -41,6 +41,7 @@ public struct DiagnosticReport: Sendable {
       chromeVersion=\(chromeVersion ?? "not-running")
       accessibilityGranted=\(accessibilityGranted)
       enabled=\(configuration.isEnabled)
+      shortcutStyle=\(configuration.shortcutStyle.rawValue)
       registeredSlots=\(registeredSlots.count)
       applicationTargets=\(applications)
       chromeProfileTargets=\(profiles)

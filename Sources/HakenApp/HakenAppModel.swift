@@ -22,6 +22,7 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
   private let chromeAdapter: ChromeProfileAdapter
   private let coordinator: SwitchCoordinator
   private let hud = SwitchHUDController()
+  private let optionHoldMonitor = OptionHoldMonitor()
 
   init() {
     let store = HakenConfigurationStore()
@@ -49,6 +50,7 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
     coordinator.onResult = { [weak self] result in self?.record(result) }
     refreshEnvironment()
     synchronizeHotKeys()
+    synchronizeHUDMonitor()
   }
 
   var assignedSlots: Int { configuration.slots.filter { $0.target != nil }.count }
@@ -91,6 +93,10 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
   func setEnabled(_ enabled: Bool) { mutate { $0.isEnabled = enabled } }
 
   func setFeedbackMode(_ feedbackMode: FeedbackMode) { mutate { $0.feedbackMode = feedbackMode } }
+
+  func setShortcutStyle(_ shortcutStyle: ShortcutStyle) {
+    mutate { $0.shortcutStyle = shortcutStyle }
+  }
 
   func setDeveloperMode(_ enabled: Bool) { mutate { $0.developerMode = enabled } }
 
@@ -151,6 +157,7 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
       configuration = store.configuration
       configurationError = nil
       synchronizeHotKeys()
+      synchronizeHUDMonitor()
     } catch {
       record(
         SwitchResult(
@@ -165,6 +172,8 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
       configuration = store.configuration
       configurationError = nil
       synchronizeHotKeys()
+      synchronizeHUDMonitor()
+      if !configuration.isEnabled || configuration.feedbackMode != .hud { hud.dismiss() }
     } catch {
       configurationError = .configurationCorrupt
       record(
@@ -178,7 +187,8 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
     let slots =
       configuration.isEnabled
       ? Set(configuration.slots.compactMap { $0.target == nil ? nil : $0.id }) : []
-    hotKeyErrors = registrar.synchronize(slots: slots) { [weak self] slot in self?.test(slot: slot)
+    hotKeyErrors = registrar.synchronize(slots: slots, style: configuration.shortcutStyle) {
+      [weak self] slot in self?.test(slot: slot)
     }
     for error in hotKeyErrors.values {
       record(
@@ -193,8 +203,19 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
   private func record(_ result: SwitchResult) {
     recentResults.insert(result, at: 0)
     recentResults = Array(recentResults.prefix(20))
-    if configuration.feedbackMode == .hud, let slot = result.slot {
-      hud.present(result: result, target: configuration.target(for: slot))
-    }
+  }
+
+  private func showShortcutHUD() {
+    guard configuration.isEnabled, configuration.feedbackMode == .hud else { return }
+    hud.present(slots: configuration.slots, shortcutStyle: configuration.shortcutStyle)
+  }
+
+  private func synchronizeHUDMonitor() {
+    hud.dismiss()
+    optionHoldMonitor.start(
+      modifier: configuration.shortcutStyle.modifier,
+      onLongPress: { [weak self] in self?.showShortcutHUD() },
+      onRelease: { [weak self] in self?.hud.dismiss() }
+    )
   }
 }

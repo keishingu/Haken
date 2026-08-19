@@ -12,6 +12,7 @@ public struct HakenConfiguration: Codable, Equatable, Sendable {
   public var isEnabled: Bool
   public var launchAtLogin: Bool
   public var slots: [HakenSlot]
+  public var shortcutStyle: ShortcutStyle
   public var feedbackMode: FeedbackMode
   public var developerMode: Bool
 
@@ -20,6 +21,7 @@ public struct HakenConfiguration: Codable, Equatable, Sendable {
     isEnabled: Bool = true,
     launchAtLogin: Bool = false,
     slots: [HakenSlot] = SlotKey.displayOrder.map { HakenSlot(id: $0) },
+    shortcutStyle: ShortcutStyle = .optionNumber,
     feedbackMode: FeedbackMode = .menuBar,
     developerMode: Bool = false
   ) {
@@ -27,6 +29,7 @@ public struct HakenConfiguration: Codable, Equatable, Sendable {
     self.isEnabled = isEnabled
     self.launchAtLogin = launchAtLogin
     self.slots = Self.normalizedSlots(slots)
+    self.shortcutStyle = shortcutStyle
     self.feedbackMode = feedbackMode
     self.developerMode = developerMode
   }
@@ -49,6 +52,23 @@ public struct HakenConfiguration: Codable, Equatable, Sendable {
     SlotKey.displayOrder.map { key in
       slots.last(where: { $0.id == key }) ?? HakenSlot(id: key)
     }
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case schemaVersion, isEnabled, launchAtLogin, slots, shortcutStyle, feedbackMode, developerMode
+  }
+
+  public init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    schemaVersion = try values.decode(Int.self, forKey: .schemaVersion)
+    isEnabled = try values.decode(Bool.self, forKey: .isEnabled)
+    launchAtLogin = try values.decode(Bool.self, forKey: .launchAtLogin)
+    slots = Self.normalizedSlots(try values.decode([HakenSlot].self, forKey: .slots))
+    shortcutStyle =
+      try values.decodeIfPresent(ShortcutStyle.self, forKey: .shortcutStyle)
+      ?? .optionNumber
+    feedbackMode = try values.decode(FeedbackMode.self, forKey: .feedbackMode)
+    developerMode = try values.decode(Bool.self, forKey: .developerMode)
   }
 }
 
@@ -94,6 +114,7 @@ public final class HakenConfigurationStore: @unchecked Sendable {
           isEnabled: decoded.isEnabled,
           launchAtLogin: decoded.launchAtLogin,
           slots: decoded.slots,
+          shortcutStyle: decoded.shortcutStyle,
           feedbackMode: decoded.feedbackMode,
           developerMode: decoded.developerMode
         )

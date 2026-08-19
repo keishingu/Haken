@@ -46,7 +46,7 @@ private struct SlotsView: View {
         VStack(alignment: .leading) {
           Text("Haken Slots").font(.title2.bold())
           Text(
-            "Assigned slots reserve ⌥1 through ⌥0. Empty slots stay available to the foreground app."
+            "Assigned slots reserve the selected shortcuts. Empty slots stay available to the foreground app."
           )
           .foregroundStyle(.secondary)
         }
@@ -72,8 +72,8 @@ private struct SlotRow: View {
 
   var body: some View {
     HStack(spacing: 14) {
-      Text(slot.id.displayValue).font(.system(.body, design: .monospaced)).frame(
-        width: 42, alignment: .leading)
+      Text(model.configuration.shortcutStyle.displayValue(for: slot.id))
+        .font(.system(.body, design: .monospaced)).frame(width: 52, alignment: .leading)
       Image(systemName: icon).frame(width: 20)
       VStack(alignment: .leading) {
         Text(slot.target?.displayName ?? "Not assigned")
@@ -142,6 +142,18 @@ private struct SettingsView: View {
           isOn: Binding(
             get: { model.configuration.launchAtLogin }, set: { model.setLaunchAtLogin($0) }
           ))
+        Picker(
+          "Shortcut keys",
+          selection: Binding(
+            get: { model.configuration.shortcutStyle }, set: { model.setShortcutStyle($0) }
+          )
+        ) {
+          ForEach(ShortcutStyle.allCases) { style in
+            Text(style.displayName).tag(style)
+          }
+        }
+        Text("The selected pattern applies to all 10 slots.")
+          .font(.caption).foregroundStyle(.secondary)
         Picker(
           "Switch feedback",
           selection: Binding(
@@ -212,7 +224,7 @@ private struct DiagnosticsView: View {
         VStack(alignment: .leading) {
           Text(result.error?.userMessage ?? result.summary)
           Text(
-            "\(result.slot?.displayValue ?? "Manual") · \(result.targetKind ?? "Haken") · \(result.durationMilliseconds) ms"
+            "\(result.slot.map { model.configuration.shortcutStyle.displayValue(for: $0) } ?? "Manual") · \(result.targetKind ?? "Haken") · \(result.durationMilliseconds) ms"
           )
           .font(.caption).foregroundStyle(.secondary)
         }

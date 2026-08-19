@@ -23,7 +23,7 @@ public enum HakenError: Error, Equatable, Sendable {
     case .disabled: "Haken is paused. Turn Haken back on in Settings to use its slots."
     case .unassignedSlot: "This slot has no target. Assign an app or Chrome profile in Settings."
     case .hotKeyRegistrationFailed(let slot):
-      "\(slot.displayValue) could not be registered. Check for a conflicting app, then retry or unassign this slot."
+      "The shortcut for slot \(slot.rawValue) could not be registered. Check for a conflicting app, then retry or unassign this slot."
     case .applicationNotFound:
       "The assigned application could not be found. Reinstall it or choose the application again."
     case .applicationAmbiguous:

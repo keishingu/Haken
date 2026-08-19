@@ -13,6 +13,7 @@ final class GlobalHotKeyRegistrar {
   private var handlerInstallationStatus: OSStatus = noErr
   private var refs: [SlotKey: EventHotKeyRef] = [:]
   private var slotsByID: [UInt32: SlotKey] = [:]
+  private var registeredStyle: ShortcutStyle?
   private var onPress: ((SlotKey) -> Void)?
   private let logger = Logger(
     subsystem: Bundle.main.bundleIdentifier ?? "com.haken.app", category: "hotkey")
@@ -39,10 +40,14 @@ final class GlobalHotKeyRegistrar {
   }
 
   @discardableResult
-  func synchronize(slots: Set<SlotKey>, onPress: @escaping (SlotKey) -> Void) -> [SlotKey:
-    HakenError]
-  {
+  func synchronize(
+    slots: Set<SlotKey>, style: ShortcutStyle, onPress: @escaping (SlotKey) -> Void
+  ) -> [SlotKey: HakenError] {
     self.onPress = onPress
+    if registeredStyle != style {
+      unregisterAll()
+      registeredStyle = style
+    }
     var errors: [SlotKey: HakenError] = [:]
     guard handlerInstallationStatus == noErr else {
       for slot in slots { errors[slot] = .hotKeyRegistrationFailed(slot) }
@@ -52,11 +57,9 @@ final class GlobalHotKeyRegistrar {
       return errors
     }
     let additions = slots.subtracting(Set(refs.keys))
-    var newlyRegistered: [SlotKey] = []
     for slot in additions {
       do {
-        try register(slot)
-        newlyRegistered.append(slot)
+        try register(slot, style: style)
       } catch {
         errors[slot] = .hotKeyRegistrationFailed(slot)
       }
@@ -73,11 +76,18 @@ final class GlobalHotKeyRegistrar {
 
   var registeredSlots: Set<SlotKey> { Set(refs.keys) }
 
-  private func register(_ slot: SlotKey) throws {
+  private func register(_ slot: SlotKey, style: ShortcutStyle) throws {
     let identifier = EventHotKeyID(signature: Self.signature, id: UInt32(slot.rawValue))
     var reference: EventHotKeyRef?
+    let modifiers: UInt32 =
+      switch style.modifier {
+      case .option: UInt32(optionKey)
+      case .command: UInt32(cmdKey)
+      case .none: 0
+      }
+    let keyCode = style.virtualKeyCode(for: slot)
     let status = RegisterEventHotKey(
-      slot.virtualKeyCode, UInt32(optionKey), identifier, GetApplicationEventTarget(),
+      keyCode, modifiers, identifier, GetApplicationEventTarget(),
       OptionBits(kEventHotKeyExclusive), &reference
     )
     guard status == noErr, let reference else {
@@ -87,7 +97,7 @@ final class GlobalHotKeyRegistrar {
       throw GlobalHotKeyRegistrarError.registrationFailed(slot, status)
     }
     logger.info(
-      "Hot key registered slot=\(slot.rawValue, privacy: .public) keyCode=\(slot.virtualKeyCode, privacy: .public)"
+      "Hot key registered slot=\(slot.rawValue, privacy: .public) keyCode=\(keyCode, privacy: .public) style=\(style.rawValue, privacy: .public)"
     )
     refs[slot] = reference
     slotsByID[identifier.id] = slot
