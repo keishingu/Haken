@@ -5,14 +5,14 @@ import HakenCore
 /// Observes the session-wide modifier state without intercepting or recording key events.
 final class OptionHoldMonitor {
   private static let shortcutModifierFlags: CGEventFlags = [
-    .maskCommand, .maskAlternate, .maskControl, .maskShift,
+    .maskCommand, .maskAlternate, .maskControl, .maskShift, .maskSecondaryFn,
   ]
-  private static let nonModifierKeyCodes =
-    (0..<128).filter { !(54...63).contains($0) }.map(CGKeyCode.init)
 
   private let pollInterval: TimeInterval
   private var timer: Timer?
   private var state = HUDHoldGestureState()
+  private var keyDownCount = CGEventSource.counterForEventType(
+    .combinedSessionState, eventType: .keyDown)
   private var onLongPress: (() -> Void)?
   private var onDismiss: (() -> Void)?
 
@@ -30,6 +30,8 @@ final class OptionHoldMonitor {
   ) {
     stop()
     guard modifier != .none else { return }
+    keyDownCount = CGEventSource.counterForEventType(
+      .combinedSessionState, eventType: .keyDown)
     self.onLongPress = onLongPress
     self.onDismiss = onDismiss
 
@@ -51,13 +53,14 @@ final class OptionHoldMonitor {
     let flag: CGEventFlags = modifier == .command ? .maskCommand : .maskAlternate
     let flags = CGEventSource.flagsState(.combinedSessionState)
       .intersection(Self.shortcutModifierFlags)
+    let nextKeyDownCount = CGEventSource.counterForEventType(
+      .combinedSessionState, eventType: .keyDown)
+    let receivedKeyDown = nextKeyDownCount != keyDownCount
+    keyDownCount = nextKeyDownCount
     let modifierIsPressed = flags.contains(flag)
     let additionalKeyIsPressed =
       modifierIsPressed
-      && (flags != flag
-        || Self.nonModifierKeyCodes.contains {
-          CGEventSource.keyState(.combinedSessionState, key: $0)
-        })
+      && (flags != flag || receivedKeyDown)
 
     switch state.update(
       modifierIsPressed: modifierIsPressed,
