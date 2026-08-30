@@ -7,6 +7,8 @@ public enum FeedbackMode: String, Codable, CaseIterable, Sendable {
 
 public struct HakenConfiguration: Codable, Equatable, Sendable {
   public static let currentSchemaVersion = 1
+  public static let defaultHUDHoldDuration: TimeInterval = 0.35
+  public static let hudHoldDurationRange: ClosedRange<TimeInterval> = 0.10...1.50
 
   public var schemaVersion: Int
   public var isEnabled: Bool
@@ -14,6 +16,7 @@ public struct HakenConfiguration: Codable, Equatable, Sendable {
   public var slots: [HakenSlot]
   public var shortcutStyle: ShortcutStyle
   public var feedbackMode: FeedbackMode
+  public var hudHoldDuration: TimeInterval
   public var developerMode: Bool
 
   public init(
@@ -23,6 +26,7 @@ public struct HakenConfiguration: Codable, Equatable, Sendable {
     slots: [HakenSlot] = SlotKey.displayOrder.map { HakenSlot(id: $0) },
     shortcutStyle: ShortcutStyle = .optionNumber,
     feedbackMode: FeedbackMode = .menuBar,
+    hudHoldDuration: TimeInterval = Self.defaultHUDHoldDuration,
     developerMode: Bool = false
   ) {
     self.schemaVersion = schemaVersion
@@ -31,6 +35,7 @@ public struct HakenConfiguration: Codable, Equatable, Sendable {
     self.slots = Self.normalizedSlots(slots)
     self.shortcutStyle = shortcutStyle
     self.feedbackMode = feedbackMode
+    self.hudHoldDuration = hudHoldDuration.clamped(to: Self.hudHoldDurationRange)
     self.developerMode = developerMode
   }
 
@@ -55,7 +60,8 @@ public struct HakenConfiguration: Codable, Equatable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, isEnabled, launchAtLogin, slots, shortcutStyle, feedbackMode, developerMode
+    case schemaVersion, isEnabled, launchAtLogin, slots, shortcutStyle, feedbackMode,
+      hudHoldDuration, developerMode
   }
 
   public init(from decoder: Decoder) throws {
@@ -68,6 +74,10 @@ public struct HakenConfiguration: Codable, Equatable, Sendable {
       try values.decodeIfPresent(ShortcutStyle.self, forKey: .shortcutStyle)
       ?? .optionNumber
     feedbackMode = try values.decode(FeedbackMode.self, forKey: .feedbackMode)
+    hudHoldDuration =
+      try values.decodeIfPresent(TimeInterval.self, forKey: .hudHoldDuration)?
+      .clamped(to: Self.hudHoldDurationRange)
+      ?? Self.defaultHUDHoldDuration
     developerMode = try values.decode(Bool.self, forKey: .developerMode)
   }
 }
@@ -116,6 +126,7 @@ public final class HakenConfigurationStore: @unchecked Sendable {
           slots: decoded.slots,
           shortcutStyle: decoded.shortcutStyle,
           feedbackMode: decoded.feedbackMode,
+          hudHoldDuration: decoded.hudHoldDuration,
           developerMode: decoded.developerMode
         )
         self.loadState = .ready
@@ -172,5 +183,11 @@ public final class HakenConfigurationStore: @unchecked Sendable {
     } catch {
       throw ConfigurationError.writeFailed
     }
+  }
+}
+
+extension Comparable {
+  fileprivate func clamped(to range: ClosedRange<Self>) -> Self {
+    min(max(self, range.lowerBound), range.upperBound)
   }
 }

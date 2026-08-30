@@ -94,6 +94,10 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
 
   func setFeedbackMode(_ feedbackMode: FeedbackMode) { mutate { $0.feedbackMode = feedbackMode } }
 
+  func setHUDHoldDuration(_ duration: TimeInterval) {
+    mutate { $0.hudHoldDuration = duration }
+  }
+
   func setShortcutStyle(_ shortcutStyle: ShortcutStyle) {
     mutate { $0.shortcutStyle = shortcutStyle }
   }
@@ -214,8 +218,9 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
     hud.dismiss()
     optionHoldMonitor.start(
       modifier: configuration.shortcutStyle.modifier,
+      holdDuration: configuration.hudHoldDuration,
       onLongPress: { [weak self] in self?.showShortcutHUD() },
-      onRelease: { [weak self] in self?.hud.dismiss() }
+      onDismiss: { [weak self] in self?.hud.dismiss() }
     )
   }
 }

@@ -4,32 +4,46 @@ import HakenCore
 
 /// Observes the session-wide modifier state without intercepting or recording key events.
 final class OptionHoldMonitor {
-  private let holdDuration: TimeInterval
+  private static let shortcutModifierFlags: CGEventFlags = [
+    .maskCommand, .maskAlternate, .maskControl, .maskShift, .maskSecondaryFn,
+  ]
+
   private let pollInterval: TimeInterval
   private var timer: Timer?
-  private var pressedAt: Date?
-  private var didRecognizeHold = false
+  private var state = HUDHoldGestureState()
+  private var keyDownCount = CGEventSource.counterForEventType(
+    .combinedSessionState, eventType: .keyDown)
+  private var flagsChangedCount = CGEventSource.counterForEventType(
+    .combinedSessionState, eventType: .flagsChanged)
+  private var modifierWasPressed = false
   private var onLongPress: (() -> Void)?
-  private var onRelease: (() -> Void)?
+  private var onDismiss: (() -> Void)?
 
-  init(holdDuration: TimeInterval = 0.35, pollInterval: TimeInterval = 1.0 / 30.0) {
-    self.holdDuration = holdDuration
+  init(pollInterval: TimeInterval = 1.0 / 30.0) {
     self.pollInterval = pollInterval
   }
 
   deinit { timer?.invalidate() }
 
   func start(
-    modifier: ShortcutModifier, onLongPress: @escaping () -> Void,
-    onRelease: @escaping () -> Void
+    modifier: ShortcutModifier,
+    holdDuration: TimeInterval,
+    onLongPress: @escaping () -> Void,
+    onDismiss: @escaping () -> Void
   ) {
     stop()
     guard modifier != .none else { return }
+    keyDownCount = CGEventSource.counterForEventType(
+      .combinedSessionState, eventType: .keyDown)
+    flagsChangedCount = CGEventSource.counterForEventType(
+      .combinedSessionState, eventType: .flagsChanged)
+    let flag: CGEventFlags = modifier == .command ? .maskCommand : .maskAlternate
+    modifierWasPressed = CGEventSource.flagsState(.combinedSessionState).contains(flag)
     self.onLongPress = onLongPress
-    self.onRelease = onRelease
+    self.onDismiss = onDismiss
 
     let timer = Timer(timeInterval: pollInterval, repeats: true) { [weak self] _ in
-      self?.sampleModifierState(modifier: modifier)
+      self?.sampleKeyboardState(modifier: modifier, holdDuration: holdDuration)
     }
     timer.tolerance = min(0.015, pollInterval / 2)
     self.timer = timer
@@ -39,28 +53,41 @@ final class OptionHoldMonitor {
   func stop() {
     timer?.invalidate()
     timer = nil
-    pressedAt = nil
-    didRecognizeHold = false
+    state = HUDHoldGestureState()
   }
 
-  private func sampleModifierState(modifier: ShortcutModifier, now: Date = Date()) {
+  private func sampleKeyboardState(modifier: ShortcutModifier, holdDuration: TimeInterval) {
     let flag: CGEventFlags = modifier == .command ? .maskCommand : .maskAlternate
-    let modifierIsPressed = CGEventSource.flagsState(.combinedSessionState).contains(flag)
+    let flags = CGEventSource.flagsState(.combinedSessionState)
+      .intersection(Self.shortcutModifierFlags)
+    let nextKeyDownCount = CGEventSource.counterForEventType(
+      .combinedSessionState, eventType: .keyDown)
+    let receivedKeyDown = nextKeyDownCount != keyDownCount
+    keyDownCount = nextKeyDownCount
+    let nextFlagsChangedCount = CGEventSource.counterForEventType(
+      .combinedSessionState, eventType: .flagsChanged)
+    let modifierIsPressed = flags.contains(flag)
+    let primaryModifierChanges = modifierIsPressed == modifierWasPressed ? 0 : 1
+    let receivedAdditionalModifierChange =
+      nextFlagsChangedCount &- flagsChangedCount > primaryModifierChanges
+    flagsChangedCount = nextFlagsChangedCount
+    modifierWasPressed = modifierIsPressed
+    let additionalKeyIsPressed =
+      modifierIsPressed
+      && (flags != flag || receivedKeyDown || receivedAdditionalModifierChange)
 
-    guard modifierIsPressed else {
-      if didRecognizeHold { onRelease?() }
-      pressedAt = nil
-      didRecognizeHold = false
-      return
+    switch state.update(
+      modifierIsPressed: modifierIsPressed,
+      additionalKeyIsPressed: additionalKeyIsPressed,
+      now: ProcessInfo.processInfo.systemUptime,
+      holdDuration: holdDuration
+    ) {
+    case .show:
+      onLongPress?()
+    case .hide:
+      onDismiss?()
+    case .none:
+      break
     }
-
-    guard !didRecognizeHold else { return }
-    guard let pressedAt else {
-      self.pressedAt = now
-      return
-    }
-    guard now.timeIntervalSince(pressedAt) >= holdDuration else { return }
-    didRecognizeHold = true
-    onLongPress?()
   }
 }

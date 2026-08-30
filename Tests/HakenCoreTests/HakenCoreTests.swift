@@ -21,11 +21,46 @@ struct HakenCoreTests {
       """.utf8)
     let configuration = try JSONDecoder().decode(HakenConfiguration.self, from: data)
     #expect(configuration.shortcutStyle == .optionNumber)
+    #expect(configuration.hudHoldDuration == HakenConfiguration.defaultHUDHoldDuration)
+  }
+
+  @Test func hudHoldLatchesAnAdditionalInputPulseUntilModifierRelease() {
+    var state = HUDHoldGestureState()
+
+    #expect(
+      state.update(
+        modifierIsPressed: true, additionalKeyIsPressed: false, now: 0,
+        holdDuration: 0.35) == .none)
+    #expect(
+      state.update(
+        modifierIsPressed: true, additionalKeyIsPressed: true, now: 0.2,
+        holdDuration: 0.35) == .none)
+    #expect(
+      state.update(
+        modifierIsPressed: true, additionalKeyIsPressed: false, now: 1,
+        holdDuration: 0.35) == .none)
+    #expect(
+      state.update(
+        modifierIsPressed: false, additionalKeyIsPressed: false, now: 1.1,
+        holdDuration: 0.35) == .none)
+    #expect(
+      state.update(
+        modifierIsPressed: true, additionalKeyIsPressed: false, now: 2,
+        holdDuration: 0.35) == .none)
+    #expect(
+      state.update(
+        modifierIsPressed: true, additionalKeyIsPressed: false, now: 2.35,
+        holdDuration: 0.35) == .show)
+    #expect(
+      state.update(
+        modifierIsPressed: true, additionalKeyIsPressed: true, now: 2.4,
+        holdDuration: 0.35) == .hide)
   }
 
   @Test func targetsRoundTripThroughConfiguration() throws {
     var configuration = HakenConfiguration()
     configuration.shortcutStyle = .commandFunction
+    configuration.hudHoldDuration = 0.8
     configuration.setTarget(
       .application(
         ApplicationTarget(
@@ -42,6 +77,7 @@ struct HakenCoreTests {
       HakenConfiguration.self, from: JSONEncoder().encode(configuration))
     #expect(decoded == configuration)
     #expect(decoded.shortcutStyle == .commandFunction)
+    #expect(decoded.hudHoldDuration == 0.8)
     #expect(decoded.usesChromeProfiles)
   }
 
