@@ -163,6 +163,24 @@ private struct SettingsView: View {
           Text("Menu Bar").tag(FeedbackMode.menuBar)
           Text("HUD").tag(FeedbackMode.hud)
         }
+        LabeledContent("HUD delay") {
+          HStack {
+            Slider(
+              value: Binding(
+                get: { model.configuration.hudHoldDuration },
+                set: { model.setHUDHoldDuration($0) }
+              ),
+              in: HakenConfiguration.hudHoldDurationRange,
+              step: 0.05
+            )
+            Text(model.configuration.hudHoldDuration, format: .number.precision(.fractionLength(2)))
+              .monospacedDigit()
+            Text("s").foregroundStyle(.secondary)
+          }
+        }
+        .disabled(
+          model.configuration.feedbackMode != .hud
+            || model.configuration.shortcutStyle.modifier == .none)
         Toggle(
           "Developer Mode",
           isOn: Binding(
