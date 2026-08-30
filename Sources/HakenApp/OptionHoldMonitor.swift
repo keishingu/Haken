@@ -13,6 +13,9 @@ final class OptionHoldMonitor {
   private var state = HUDHoldGestureState()
   private var keyDownCount = CGEventSource.counterForEventType(
     .combinedSessionState, eventType: .keyDown)
+  private var flagsChangedCount = CGEventSource.counterForEventType(
+    .combinedSessionState, eventType: .flagsChanged)
+  private var modifierWasPressed = false
   private var onLongPress: (() -> Void)?
   private var onDismiss: (() -> Void)?
 
@@ -32,6 +35,10 @@ final class OptionHoldMonitor {
     guard modifier != .none else { return }
     keyDownCount = CGEventSource.counterForEventType(
       .combinedSessionState, eventType: .keyDown)
+    flagsChangedCount = CGEventSource.counterForEventType(
+      .combinedSessionState, eventType: .flagsChanged)
+    let flag: CGEventFlags = modifier == .command ? .maskCommand : .maskAlternate
+    modifierWasPressed = CGEventSource.flagsState(.combinedSessionState).contains(flag)
     self.onLongPress = onLongPress
     self.onDismiss = onDismiss
 
@@ -57,10 +64,17 @@ final class OptionHoldMonitor {
       .combinedSessionState, eventType: .keyDown)
     let receivedKeyDown = nextKeyDownCount != keyDownCount
     keyDownCount = nextKeyDownCount
+    let nextFlagsChangedCount = CGEventSource.counterForEventType(
+      .combinedSessionState, eventType: .flagsChanged)
     let modifierIsPressed = flags.contains(flag)
+    let primaryModifierChanges = modifierIsPressed == modifierWasPressed ? 0 : 1
+    let receivedAdditionalModifierChange =
+      nextFlagsChangedCount &- flagsChangedCount > primaryModifierChanges
+    flagsChangedCount = nextFlagsChangedCount
+    modifierWasPressed = modifierIsPressed
     let additionalKeyIsPressed =
       modifierIsPressed
-      && (flags != flag || receivedKeyDown)
+      && (flags != flag || receivedKeyDown || receivedAdditionalModifierChange)
 
     switch state.update(
       modifierIsPressed: modifierIsPressed,

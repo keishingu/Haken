@@ -24,7 +24,7 @@ struct HakenCoreTests {
     #expect(configuration.hudHoldDuration == HakenConfiguration.defaultHUDHoldDuration)
   }
 
-  @Test func hudHoldCancelsUntilModifierReleaseWhenAnotherKeyIsPressed() {
+  @Test func hudHoldLatchesAnAdditionalInputPulseUntilModifierRelease() {
     var state = HUDHoldGestureState()
 
     #expect(
