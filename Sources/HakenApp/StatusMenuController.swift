@@ -12,11 +12,22 @@ final class StatusMenuController: NSObject {
   private let resultItem = NSMenuItem()
   private let slotsItem = NSMenuItem()
   private var enabled = true
+  private lazy var normalIcon: NSImage? = {
+    guard
+      let url = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png"),
+      let image = NSImage(contentsOf: url)
+    else {
+      return NSImage(
+        systemSymbolName: "arrow.left.arrow.right.circle", accessibilityDescription: "Haken")
+    }
+    image.size = NSSize(width: 18, height: 18)
+    image.isTemplate = true
+    image.accessibilityDescription = "Haken"
+    return image
+  }()
 
   override init() {
     super.init()
-    item.button?.image = NSImage(
-      systemSymbolName: "arrow.left.arrow.right.circle", accessibilityDescription: "Haken")
     let menu = NSMenu()
     resultItem.isEnabled = false
     slotsItem.isEnabled = false
@@ -48,10 +59,11 @@ final class StatusMenuController: NSObject {
       failure?.userMessage
       ?? (lastResult.map { "Last switch: \($0.outcome.rawValue) · \($0.durationMilliseconds) ms" }
         ?? "Haken is ready")
-    item.button?.image = NSImage(
-      systemSymbolName: failure == nil ? "arrow.left.arrow.right.circle" : "exclamationmark.circle",
-      accessibilityDescription: resultItem.title
-    )
+    item.button?.image =
+      failure == nil
+      ? normalIcon
+      : NSImage(
+        systemSymbolName: "exclamationmark.circle", accessibilityDescription: resultItem.title)
   }
 
   @objc private func open() { onOpen?() }

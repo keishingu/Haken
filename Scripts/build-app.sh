@@ -20,8 +20,8 @@ rm -rf "$app_path"
 mkdir -p "$contents/MacOS" "$contents/Resources"
 cp "$binary_path" "$contents/MacOS/Haken"
 cp AppResources/Info.plist "$contents/Info.plist"
-cp AppResources/AppIcon.svg "$contents/Resources/AppIcon.svg"
-cp -R AppResources/AppIcon.iconset "$contents/Resources/AppIcon.iconset"
+iconutil -c icns AppResources/AppIcon.iconset -o "$contents/Resources/AppIcon.icns"
+cp AppResources/MenuBarIcon.png "$contents/Resources/MenuBarIcon.png"
 
 identity="${HAKEN_CODE_SIGN_IDENTITY:-}"
 if [[ -z "$identity" ]]; then
