@@ -24,6 +24,10 @@ haken doctor --json
 
 The CLI sends commands to Haken.app over a user-only local socket. It does not edit `configuration.json` or request Accessibility permission itself. Persistent changes require confirmation in a terminal or `--yes` in non-interactive use.
 
+## Secure Input
+
+macOS may withhold Option-only global hot keys while another application holds Secure Event Input. In that state, a shortcut such as `⌥3` can reach the foreground text field as `£` instead of reaching Haken. Move focus out of the secure-input application or quit it; `haken slot activate 3` remains available because it does not depend on keyboard event delivery.
+
 ## Manual verification
 
 1. Build and open the app, assign Terminal (or another installed app) to `⌥1`, then use **Test** and `⌥1`. Confirm it activates an existing instance or launches it when stopped.
