@@ -167,7 +167,7 @@ Exit statusは`sysexits.h`を基準にする。
 ### Configuration and concurrency
 
 - Haken.appをConfigのsingle writerにする。
-- Config writeとActivation requestはapp内の管理されたexecutorで直列化する。
+- Config writeはStoreのlockで直列化し、Slot activationは解決済みtargetをqueueへ渡して後続更新の影響を受けないようにする。
 - persist成功後にGUIとHotkeyを更新し、その後IPC応答を返す。
 - CLIはConfig保存場所をハードコードしない。
 - iCloud/Dropbox等を実装する時点でStoreを差し替え、v0.1では同期用抽象層を先行実装しない。

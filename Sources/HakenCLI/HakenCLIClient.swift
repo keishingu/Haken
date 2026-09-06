@@ -6,6 +6,7 @@ enum HakenCLIClientError: Error {
   case appNotFound
   case appUnavailable
   case invalidResponse
+  case responseUnavailable(Error)
   case socketPathTooLong
   case transport(Error)
 }
@@ -21,35 +22,40 @@ struct HakenCLIClient {
     _ request: HakenCLIRequest, launchApp: Bool, timeoutMilliseconds: Int
   ) throws -> HakenCLIResponse {
     let timeout = max(100, min(timeoutMilliseconds, 10_000))
-    if let response = tryExchange(request, timeoutMilliseconds: timeout) { return response }
+    if let response = try tryExchange(request, timeoutMilliseconds: timeout) { return response }
     guard launchApp else { throw HakenCLIClientError.appUnavailable }
     try launchHaken()
     let deadline = ContinuousClock.now.advanced(by: .milliseconds(timeout))
     repeat {
       Thread.sleep(forTimeInterval: 0.02)
-      if let response = tryExchange(request, timeoutMilliseconds: timeout) { return response }
+      if let response = try tryExchange(request, timeoutMilliseconds: timeout) { return response }
     } while ContinuousClock.now < deadline
     throw HakenCLIClientError.appUnavailable
   }
 
   private func tryExchange(
     _ request: HakenCLIRequest, timeoutMilliseconds: Int
-  ) -> HakenCLIResponse? {
+  ) throws -> HakenCLIResponse? {
     let descriptor = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
-    guard descriptor >= 0 else { return nil }
+    guard descriptor >= 0 else {
+      throw HakenCLIClientError.transport(HakenIPCError.connectionFailed(errno))
+    }
     defer { Darwin.close(descriptor) }
     var noSigPipe: Int32 = 1
     _ = setsockopt(
       descriptor, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe,
       socklen_t(MemoryLayout<Int32>.size))
-    guard var address = try? socketAddress(path: socketURL.path) else { return nil }
+    var address = try socketAddress(path: socketURL.path)
     let addressLength = socklen_t(address.sun_len)
     let connected = withUnsafePointer(to: &address) { pointer in
       pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
         Darwin.connect(descriptor, $0, addressLength) == 0
       }
     }
-    guard connected else { return nil }
+    guard connected else {
+      if errno == ENOENT || errno == ECONNREFUSED { return nil }
+      throw HakenCLIClientError.transport(HakenIPCError.connectionFailed(errno))
+    }
 
     var timeout = timeval(
       tv_sec: timeoutMilliseconds / 1_000,
@@ -67,7 +73,7 @@ struct HakenCLIClient {
       return try JSONDecoder().decode(
         HakenCLIResponse.self, from: HakenIPCFrame.read(from: descriptor))
     } catch {
-      return nil
+      throw HakenCLIClientError.responseUnavailable(error)
     }
   }
 

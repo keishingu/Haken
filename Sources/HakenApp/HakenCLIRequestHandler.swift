@@ -20,6 +20,12 @@ final class HakenCLIRequestHandler {
           hint: "Install the CLI bundled with this version of Haken.app.", exitCode: 76))
       return
     }
+    if case .corrupt = service.configurationLoadState,
+      request.method.hasPrefix("slot.") || request.method == "config.show"
+    {
+      completion(configurationFailure(request, start: start))
+      return
+    }
 
     switch request.method {
     case "slot.list":
@@ -45,7 +51,7 @@ final class HakenCLIRequestHandler {
             action: "activate_slot", slot: slot, target: target, willChange: nil, dryRun: true),
           completion: completion)
       } else {
-        service.activate(slot: slot) { result in
+        service.activate(slot: slot, target: target) { result in
           completion(self.response(for: request, result: result, start: start))
         }
       }
@@ -130,13 +136,19 @@ final class HakenCLIRequestHandler {
         }
       }
     case "chrome.profiles":
-      switch service.chromeProfiles() {
-      case .success(let profiles):
-        success(
-          request, start: start,
-          data: .object(["profiles": .array(profiles.map(profileJSON))]),
-          completion: completion)
-      case .failure(let error): completion(failure(request, start: start, error: error))
+      DispatchQueue.global(qos: .userInitiated).async { [service] in
+        let result = service.chromeProfiles()
+        DispatchQueue.main.async {
+          switch result {
+          case .success(let profiles):
+            self.success(
+              request, start: start,
+              data: .object(["profiles": .array(profiles.map(self.profileJSON))]),
+              completion: completion)
+          case .failure(let error):
+            completion(self.failure(request, start: start, error: error))
+          }
+        }
       }
     case "chrome.activate":
       resolveChromeTarget(request, start: start) { result in
@@ -272,7 +284,7 @@ final class HakenCLIRequestHandler {
 
   private func resolveChromeTarget(
     _ request: HakenCLIRequest, start: ContinuousClock.Instant,
-    completion: (CLIResolution<ChromeProfileTarget>) -> Void
+    completion: @escaping (CLIResolution<ChromeProfileTarget>) -> Void
   ) {
     guard let name = request.parameters["chromeProfile"]?.stringValue, !name.isEmpty else {
       completion(
@@ -282,21 +294,28 @@ final class HakenCLIRequestHandler {
             message: "A Chrome profile name is required.", exitCode: 64)))
       return
     }
-    switch service.chromeProfiles() {
-    case .failure(let error): completion(.failure(failure(request, start: start, error: error)))
-    case .success(let profiles):
-      let matches = profiles.filter { $0.name == name }
-      guard !matches.isEmpty else {
-        completion(.failure(failure(request, start: start, error: .profileNotFound)))
-        return
+    DispatchQueue.global(qos: .userInitiated).async { [service] in
+      let result = service.chromeProfiles()
+      DispatchQueue.main.async {
+        switch result {
+        case .failure(let error):
+          completion(.failure(self.failure(request, start: start, error: error)))
+        case .success(let profiles):
+          let matches = profiles.filter { $0.name == name }
+          guard !matches.isEmpty else {
+            completion(.failure(self.failure(request, start: start, error: .profileNotFound)))
+            return
+          }
+          guard matches.count == 1, let match = matches.first else {
+            completion(.failure(self.failure(request, start: start, error: .ambiguousProfile)))
+            return
+          }
+          completion(
+            .success(
+              ChromeProfileTarget(
+                profileName: match.name, lastSeenChromeVersion: match.chromeVersion)))
+        }
       }
-      guard matches.count == 1, let match = matches.first else {
-        completion(.failure(failure(request, start: start, error: .ambiguousProfile)))
-        return
-      }
-      completion(
-        .success(
-          ChromeProfileTarget(profileName: match.name, lastSeenChromeVersion: match.chromeVersion)))
     }
   }
 

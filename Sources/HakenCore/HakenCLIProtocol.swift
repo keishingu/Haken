@@ -154,7 +154,7 @@ public struct HakenCLIResponse: Codable, Equatable, Sendable {
 }
 
 public enum HakenIPC {
-  public static let maximumFrameSize = 64 * 1_024
+  public static let maximumFrameSize = 4 * 1_024 * 1_024
 
   public static func defaultSocketURL(fileManager: FileManager = .default) -> URL {
     fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

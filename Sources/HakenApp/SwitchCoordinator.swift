@@ -27,6 +27,17 @@ final class SwitchCoordinator: @unchecked Sendable {
     queue.async { [weak self] in self?.perform(slot: slot, completion: completion) }
   }
 
+  func request(
+    slot: SlotKey, target: SwitchTarget, completion: ((SwitchResult) -> Void)? = nil
+  ) {
+    queue.async { [weak self] in
+      guard let self else { return }
+      self.perform(
+        slot: slot, target: target, enabled: self.configuration().isEnabled,
+        completion: completion)
+    }
+  }
+
   func request(target: SwitchTarget, completion: ((SwitchResult) -> Void)? = nil) {
     queue.async { [weak self] in
       self?.perform(target: target, slot: nil, completion: completion)
@@ -34,10 +45,18 @@ final class SwitchCoordinator: @unchecked Sendable {
   }
 
   private func perform(slot: SlotKey, completion: ((SwitchResult) -> Void)?) {
-    let start = ContinuousClock.now
     let config = configuration()
-    let target = config.target(for: slot)
-    if !config.isEnabled {
+    perform(
+      slot: slot, target: config.target(for: slot), enabled: config.isEnabled,
+      completion: completion)
+  }
+
+  private func perform(
+    slot: SlotKey, target: SwitchTarget?, enabled: Bool,
+    completion: ((SwitchResult) -> Void)?
+  ) {
+    let start = ContinuousClock.now
+    if !enabled {
       publish(
         slot: slot, target: target, outcome: .ignored, error: .disabled, start: start,
         completion: completion)

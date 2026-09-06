@@ -160,10 +160,8 @@ final class ApplicationAdapter: @unchecked Sendable {
     }
     guard let path = target.lastKnownPath else { return applications }
     let expectedURL = URL(fileURLWithPath: path).standardizedFileURL
-    return applications.sorted {
-      let leftMatches = $0.bundleURL?.standardizedFileURL == expectedURL
-      let rightMatches = $1.bundleURL?.standardizedFileURL == expectedURL
-      return leftMatches && !rightMatches
+    return applications.filter {
+      $0.bundleURL?.standardizedFileURL == expectedURL
     }
   }
 

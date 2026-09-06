@@ -274,27 +274,37 @@ private enum CLIExecutor {
     let message: String
     let hint: String?
     let exitCode: Int32
+    let retryable: Bool
     switch error {
     case HakenCLIClientError.appNotFound:
       code = "haken_app_not_found"
       message = "Haken.app could not be found."
       hint = "Run the CLI bundled inside Haken.app or install Haken.app in Applications."
       exitCode = 69
+      retryable = false
     case HakenCLIClientError.appUnavailable:
       code = "haken_app_unavailable"
       message = "Haken.app did not become available before the timeout."
       hint = "Open Haken.app and retry."
       exitCode = 75
+      retryable = true
+    case HakenCLIClientError.responseUnavailable:
+      code = "request_status_unknown"
+      message = "Haken.app accepted the connection but did not return a response."
+      hint = "Check the current Haken state before deciding whether to retry."
+      exitCode = 75
+      retryable = false
     default:
       code = "ipc_failure"
       message = "The CLI could not communicate with Haken.app."
       hint = "Open Haken.app and retry."
       exitCode = 74
+      retryable = true
     }
     return HakenCLIResponse(
       ok: false, command: request.method,
       error: HakenCLIErrorPayload(
-        code: code, message: message, retryable: true, hint: hint, exitCode: exitCode),
+        code: code, message: message, retryable: retryable, hint: hint, exitCode: exitCode),
       meta: HakenCLIResponseMeta(
         requestId: request.requestId, cliVersion: cliVersion, appVersion: "unknown",
         durationMs: 0))

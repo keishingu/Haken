@@ -4,9 +4,9 @@ import HakenCore
 import OSLog
 
 struct ChromeProfileDescriptor: Identifiable, Hashable {
+  let id: Int
   let name: String
   let chromeVersion: String?
-  var id: String { name }
 }
 
 final class ChromeProfileAdapter: @unchecked Sendable {
@@ -18,6 +18,7 @@ final class ChromeProfileAdapter: @unchecked Sendable {
 
   private let permission: AccessibilityPermission
   private let logger: Logger
+  private let operationLock = NSLock()
   private let cacheLock = NSLock()
   private var cache: [String: CachedItem] = [:]
 
@@ -48,6 +49,10 @@ final class ChromeProfileAdapter: @unchecked Sendable {
   }
 
   func availableProfiles() -> Result<[ChromeProfileDescriptor], HakenError> {
+    operationLock.withLock { discoverProfiles() }
+  }
+
+  private func discoverProfiles() -> Result<[ChromeProfileDescriptor], HakenError> {
     guard permission.isGranted else { return .failure(.accessibilityPermissionRequired) }
     guard let chrome = chromeApplication() else { return .failure(.chromeNotRunning) }
     guard let menuBar = menuBar(for: chrome) else { return .failure(.menuBarUnavailable) }
@@ -57,10 +62,16 @@ final class ChromeProfileAdapter: @unchecked Sendable {
     let version = chromeVersion(chrome)
     logger.info("Chrome profile detection profileCount=\(names.count, privacy: .public)")
     return .success(
-      Array(Set(names)).sorted().map { ChromeProfileDescriptor(name: $0, chromeVersion: version) })
+      names.sorted().enumerated().map {
+        ChromeProfileDescriptor(id: $0.offset, name: $0.element, chromeVersion: version)
+      })
   }
 
   func switchProfile(_ target: ChromeProfileTarget) -> Result<SwitchOutcome, HakenError> {
+    operationLock.withLock { performSwitch(target) }
+  }
+
+  private func performSwitch(_ target: ChromeProfileTarget) -> Result<SwitchOutcome, HakenError> {
     guard permission.isGranted else { return .failure(.accessibilityPermissionRequired) }
     guard let chrome = chromeApplication() else { return .failure(.chromeNotRunning) }
     let version = chromeVersion(chrome)

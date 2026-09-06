@@ -164,4 +164,18 @@ struct HakenCoreTests {
     try HakenIPCFrame.write(payload, to: descriptors[0])
     #expect(try HakenIPCFrame.read(from: descriptors[1]) == payload)
   }
+
+  @Test func ipcFrameSupportsLargeApplicationCatalogResponses() throws {
+    var descriptors: [Int32] = [-1, -1]
+    #expect(socketpair(AF_UNIX, SOCK_STREAM, 0, &descriptors) == 0)
+    defer {
+      close(descriptors[0])
+      close(descriptors[1])
+    }
+    let payload = Data(repeating: 0x61, count: 128 * 1_024)
+    DispatchQueue.global().async {
+      try? HakenIPCFrame.write(payload, to: descriptors[0])
+    }
+    #expect(try HakenIPCFrame.read(from: descriptors[1]) == payload)
+  }
 }

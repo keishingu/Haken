@@ -76,6 +76,12 @@ final class HakenCommandService: @unchecked Sendable {
     coordinator.request(slot: slot, completion: completion)
   }
 
+  func activate(
+    slot: SlotKey, target: SwitchTarget, completion: ((SwitchResult) -> Void)? = nil
+  ) {
+    coordinator.request(slot: slot, target: target, completion: completion)
+  }
+
   func activate(target: SwitchTarget, completion: ((SwitchResult) -> Void)? = nil) {
     coordinator.request(target: target, completion: completion)
   }
