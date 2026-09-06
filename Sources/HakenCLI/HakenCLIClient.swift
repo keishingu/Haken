@@ -88,7 +88,17 @@ struct HakenCLIClient {
   }
 
   private func hakenAppURL() -> URL? {
-    var candidate = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+    var size: UInt32 = 0
+    _ = _NSGetExecutablePath(nil, &size)
+    var buffer = [CChar](repeating: 0, count: Int(size))
+    let result = buffer.withUnsafeMutableBufferPointer {
+      _NSGetExecutablePath($0.baseAddress, &size)
+    }
+    let executableURL =
+      result == 0
+      ? URL(fileURLWithPath: String(cString: buffer)).resolvingSymlinksInPath()
+      : URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+    var candidate = executableURL
     while candidate.path != "/" {
       if candidate.pathExtension == "app" { return candidate }
       candidate.deleteLastPathComponent()
