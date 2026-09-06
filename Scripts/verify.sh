@@ -15,5 +15,7 @@ test -f AppResources/AppIcon.iconset/icon_16x16.png
 test -f AppResources/AppIcon.iconset/icon_512x512@2x.png
 test -f "$app_path/Contents/Resources/AppIcon.svg"
 test -x "$app_path/Contents/MacOS/Haken"
+test -x "$app_path/Contents/Helpers/haken"
+codesign --verify --strict --verbose=2 "$app_path/Contents/Helpers/haken"
 codesign --verify --deep --strict --verbose=2 "$app_path"
 echo "Haken verification passed: $app_path"

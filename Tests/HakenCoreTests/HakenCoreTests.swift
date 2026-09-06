@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 
@@ -133,5 +134,34 @@ struct HakenCoreTests {
     #expect(store.loadState == .corrupt(.corruptFile))
     #expect(String(decoding: try Data(contentsOf: file), as: UTF8.self) == "not json")
     #expect(throws: ConfigurationError.self) { try store.update { $0.isEnabled = false } }
+  }
+
+  @Test func cliProtocolRoundTripsWithoutExposingConfigurationEncoding() throws {
+    let request = HakenCLIRequest(
+      requestId: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+      method: "slot.set",
+      parameters: [
+        "slot": .int(2),
+        "target": .object([
+          "type": .string("application"),
+          "bundleIdentifier": .string("com.example.app"),
+        ]),
+      ], dryRun: true)
+    let decoded = try JSONDecoder().decode(
+      HakenCLIRequest.self, from: JSONEncoder().encode(request))
+    #expect(decoded == request)
+    #expect(decoded.protocolVersion == 1)
+  }
+
+  @Test func ipcFrameRoundTripsOverLocalSocket() throws {
+    var descriptors: [Int32] = [-1, -1]
+    #expect(socketpair(AF_UNIX, SOCK_STREAM, 0, &descriptors) == 0)
+    defer {
+      close(descriptors[0])
+      close(descriptors[1])
+    }
+    let payload = Data("{\"method\":\"slot.list\"}".utf8)
+    try HakenIPCFrame.write(payload, to: descriptors[0])
+    #expect(try HakenIPCFrame.read(from: descriptors[1]) == payload)
   }
 }

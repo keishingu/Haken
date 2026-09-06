@@ -9,6 +9,21 @@ open '.build/app/Haken.app'
 
 The application writes versioned configuration to `~/Library/Application Support/Haken/configuration.json`. A malformed existing file is never silently overwritten; the Settings screen offers an explicit reset after explaining this.
 
+## Command line
+
+The app bundle includes `Contents/Helpers/haken`. Install a symlink from **Settings → Command Line**, then ensure `~/.local/bin` is in `PATH`.
+
+```sh
+haken slot list
+haken slot activate 2
+haken chrome profiles --json
+haken slot set 5 --bundle-id com.tinyspeck.slackmacgap --dry-run --json
+haken slot set 5 --bundle-id com.tinyspeck.slackmacgap --yes
+haken doctor --json
+```
+
+The CLI sends commands to Haken.app over a user-only local socket. It does not edit `configuration.json` or request Accessibility permission itself. Persistent changes require confirmation in a terminal or `--yes` in non-interactive use.
+
 ## Manual verification
 
 1. Build and open the app, assign Terminal (or another installed app) to `⌥1`, then use **Test** and `⌥1`. Confirm it activates an existing instance or launches it when stopped.

@@ -7,6 +7,11 @@ let package = Package(
   products: [
     .library(name: "HakenCore", targets: ["HakenCore"]),
     .executable(name: "Haken", targets: ["HakenApp"]),
+    // The internal product name must differ by more than case on the default macOS filesystem.
+    .executable(name: "haken-cli", targets: ["HakenCLI"]),
+  ],
+  dependencies: [
+    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.0")
   ],
   targets: [
     .target(name: "HakenCore"),
@@ -14,6 +19,13 @@ let package = Package(
       name: "HakenApp",
       dependencies: ["HakenCore"],
       linkerSettings: [.linkedFramework("Carbon")]
+    ),
+    .executableTarget(
+      name: "HakenCLI",
+      dependencies: [
+        "HakenCore",
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+      ]
     ),
     .testTarget(name: "HakenCoreTests", dependencies: ["HakenCore"]),
   ],

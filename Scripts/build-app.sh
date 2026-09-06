@@ -13,12 +13,14 @@ cd "$project_dir"
 
 swift build -c "$mode"
 binary_path="$(swift build -c "$mode" --show-bin-path)/Haken"
+cli_path="$(swift build -c "$mode" --show-bin-path)/haken-cli"
 app_path="$project_dir/.build/app/Haken.app"
 contents="$app_path/Contents"
 
 rm -rf "$app_path"
-mkdir -p "$contents/MacOS" "$contents/Resources"
+mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Resources"
 cp "$binary_path" "$contents/MacOS/Haken"
+cp "$cli_path" "$contents/Helpers/haken"
 cp AppResources/Info.plist "$contents/Info.plist"
 cp AppResources/AppIcon.svg "$contents/Resources/AppIcon.svg"
 cp -R AppResources/AppIcon.iconset "$contents/Resources/AppIcon.iconset"
@@ -29,9 +31,11 @@ if [[ -z "$identity" ]]; then
 fi
 if [[ -n "$identity" ]]; then
   echo "Signing with Apple Development certificate."
+  codesign --force --options runtime --sign "$identity" "$contents/Helpers/haken"
   codesign --force --options runtime --sign "$identity" "$app_path"
 else
   echo "warning: Apple Development certificate unavailable; using ad-hoc signing. Accessibility permission may need to be granted again after rebuilds." >&2
+  codesign --force --sign - "$contents/Helpers/haken"
   codesign --force --sign - "$app_path"
 fi
 
