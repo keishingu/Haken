@@ -1,0 +1,4 @@
+interface:
+  display_name: "Haken Control"
+  short_description: "Control Haken slots, apps, and Chrome profiles"
+  default_prompt: "Use $haken-control to inspect my Haken setup and safely perform the requested local action."
