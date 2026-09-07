@@ -5,7 +5,6 @@
     <key>CFBundleDisplayName</key><string>Haken</string>
     <key>CFBundleExecutable</key><string>Haken</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
-    <key>CFBundleIconName</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>com.haken.app</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
     <key>CFBundleName</key><string>Haken</string>
