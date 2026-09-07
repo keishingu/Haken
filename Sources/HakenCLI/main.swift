@@ -13,7 +13,7 @@ struct GlobalOptions: ParsableArguments {
   var noLaunch = false
 
   @Option(name: .long, help: "IPC timeout in milliseconds (100...10000).")
-  var timeout = 2_000
+  var timeout = 7_000
 
   func validate() throws {
     guard (100...10_000).contains(timeout) else {

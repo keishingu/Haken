@@ -420,6 +420,7 @@ final class HakenCLIRequestHandler {
         "type": .string("application"),
         "displayName": .string(application.displayName),
         "bundleIdentifier": .string(application.bundleIdentifier),
+        "path": application.lastKnownPath.map(HakenJSONValue.string) ?? .null,
       ])
     case .chromeProfile(let profile):
       return .object([
