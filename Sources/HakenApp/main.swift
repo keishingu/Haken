@@ -1,14 +1,17 @@
 import AppKit
 import Combine
+import OSLog
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var model: HakenAppModel?
   private var windowController: ConfigurationWindowController?
   private var statusMenu: StatusMenuController?
+  private var ipcServer: HakenIPCServer?
   private var observation: AnyCancellable?
 
   func applicationDidFinishLaunching(_ notification: Notification) {
-    NSApplication.shared.setActivationPolicy(.regular)
+    let backgroundLaunch = CommandLine.arguments.contains("--haken-cli-background")
+    NSApplication.shared.setActivationPolicy(backgroundLaunch ? .accessory : .regular)
     let model = HakenAppModel()
     let windowController = ConfigurationWindowController(model: model)
     let menu = StatusMenuController()
@@ -27,14 +30,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     self.model = model
     self.windowController = windowController
     statusMenu = menu
-    windowController.present()
+    let server = HakenIPCServer(handler: HakenCLIRequestHandler(model: model))
+    do {
+      try server.start()
+      ipcServer = server
+    } catch {
+      Logger(subsystem: "com.haken.app", category: "ipc").error("CLI IPC server failed to start")
+    }
+    if !backgroundLaunch { windowController.present() }
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
   {
-    if !flag { windowController?.present() }
+    if !flag {
+      NSApplication.shared.setActivationPolicy(.regular)
+      windowController?.present()
+    }
     return true
   }
+
+  func applicationWillTerminate(_ notification: Notification) { ipcServer?.stop() }
 }
 
 let application = NSApplication.shared

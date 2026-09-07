@@ -12,42 +12,30 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
   @Published private(set) var hotKeyErrors: [SlotKey: HakenError] = [:]
   @Published private(set) var accessibilityGranted = false
   @Published private(set) var configurationError: HakenError?
+  @Published private(set) var cliInstalled = false
+  @Published private(set) var cliInstallMessage: String?
 
-  let applicationAdapter: ApplicationAdapter
-  private let store: HakenConfigurationStore
+  let commandService: HakenCommandService
+  var applicationAdapter: ApplicationAdapter { commandService.applicationAdapter }
   private let registrar = GlobalHotKeyRegistrar()
-  private let permission = AccessibilityPermission()
   private let logger = Logger(
     subsystem: Bundle.main.bundleIdentifier ?? "com.haken.app", category: "lifecycle")
-  private let chromeAdapter: ChromeProfileAdapter
-  private let coordinator: SwitchCoordinator
   private let hud = SwitchHUDController()
   private let optionHoldMonitor = OptionHoldMonitor()
+  private let cliInstaller = CLIInstaller()
 
   init() {
-    let store = HakenConfigurationStore()
-    let applicationAdapter = ApplicationAdapter()
-    let permission = AccessibilityPermission()
-    let chromeAdapter = ChromeProfileAdapter(
-      permission: permission,
-      logger: Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "com.haken.app", category: "chrome-profile")
-    )
-    self.store = store
-    self.applicationAdapter = applicationAdapter
-    self.chromeAdapter = chromeAdapter
-    self.configuration = store.configuration
+    let commandService = HakenCommandService()
+    self.commandService = commandService
+    self.configuration = commandService.configuration
     self.configurationError = {
-      if case .corrupt = store.loadState { return .configurationCorrupt }
+      if case .corrupt = commandService.configurationLoadState { return .configurationCorrupt }
       return nil
     }()
-    self.coordinator = SwitchCoordinator(
-      applicationAdapter: applicationAdapter,
-      chromeAdapter: chromeAdapter,
-      configuration: { store.configuration },
-      logger: Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.haken.app", category: "switch")
-    )
-    coordinator.onResult = { [weak self] result in self?.record(result) }
+    commandService.onConfigurationChange = { [weak self] configuration in
+      self?.configurationDidChange(configuration)
+    }
+    commandService.onResult = { [weak self] result in self?.record(result) }
     refreshEnvironment()
     synchronizeHotKeys()
     synchronizeHUDMonitor()
@@ -58,18 +46,19 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
   var lastResult: SwitchResult? { recentResults.first }
 
   func refreshEnvironment() {
-    accessibilityGranted = permission.isGranted
-    DispatchQueue.global(qos: .userInitiated).async { [weak self, applicationAdapter] in
-      let candidates = applicationAdapter.runningAndInstalledApplications()
+    accessibilityGranted = commandService.accessibilityGranted
+    cliInstalled = cliInstaller.isInstalled
+    DispatchQueue.global(qos: .userInitiated).async { [weak self, commandService] in
+      let candidates = commandService.applications()
       DispatchQueue.main.async { self?.applicationCandidates = candidates }
     }
   }
 
   func refreshChromeProfiles() {
-    accessibilityGranted = permission.isGranted
-    let adapter = chromeAdapter
+    accessibilityGranted = commandService.accessibilityGranted
+    let commandService = commandService
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-      let result = adapter.availableProfiles()
+      let result = commandService.chromeProfiles()
       DispatchQueue.main.async {
         switch result {
         case .success(let profiles): self?.chromeProfiles = profiles
@@ -84,11 +73,24 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
   }
 
   func requestAccessibility() {
-    _ = permission.request()
-    accessibilityGranted = permission.isGranted
+    _ = commandService.requestAccessibility()
+    accessibilityGranted = commandService.accessibilityGranted
   }
 
-  func openAccessibilitySettings() { permission.openSystemSettings() }
+  func openAccessibilitySettings() { commandService.openAccessibilitySettings() }
+
+  var cliInstallPath: String { cliInstaller.destinationURL.path }
+
+  func installCLI() {
+    do {
+      try cliInstaller.install()
+      cliInstalled = true
+      cliInstallMessage = "Installed at \(cliInstaller.destinationURL.path)"
+    } catch {
+      cliInstalled = false
+      cliInstallMessage = error.localizedDescription
+    }
+  }
 
   func setEnabled(_ enabled: Bool) { mutate { $0.isEnabled = enabled } }
 
@@ -124,7 +126,7 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
     mutate { $0.setTarget(target, for: slot) }
   }
 
-  func test(slot: SlotKey) { coordinator.request(slot: slot) }
+  func test(slot: SlotKey) { commandService.activate(slot: slot) }
 
   @MainActor func chooseApplication(for slot: SlotKey) {
     let panel = NSOpenPanel()
@@ -157,11 +159,7 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
 
   func resetCorruptConfiguration() {
     do {
-      try store.resetAfterCorruption()
-      configuration = store.configuration
-      configurationError = nil
-      synchronizeHotKeys()
-      synchronizeHUDMonitor()
+      try commandService.resetAfterCorruption()
     } catch {
       record(
         SwitchResult(
@@ -172,12 +170,7 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
 
   private func mutate(_ change: (inout HakenConfiguration) -> Void) {
     do {
-      try store.update(change)
-      configuration = store.configuration
-      configurationError = nil
-      synchronizeHotKeys()
-      synchronizeHUDMonitor()
-      if !configuration.isEnabled || configuration.feedbackMode != .hud { hud.dismiss() }
+      try commandService.update(change)
     } catch {
       configurationError = .configurationCorrupt
       record(
@@ -185,6 +178,14 @@ final class HakenAppModel: ObservableObject, @unchecked Sendable {
           slot: nil, targetKind: nil, outcome: .failed, durationMilliseconds: 0,
           error: .configurationCorrupt))
     }
+  }
+
+  private func configurationDidChange(_ configuration: HakenConfiguration) {
+    self.configuration = configuration
+    configurationError = nil
+    synchronizeHotKeys()
+    synchronizeHUDMonitor()
+    if !configuration.isEnabled || configuration.feedbackMode != .hud { hud.dismiss() }
   }
 
   private func synchronizeHotKeys() {

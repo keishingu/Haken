@@ -209,6 +209,17 @@ private struct SettingsView: View {
           }
         }
       }
+      Section("Command Line") {
+        Text(model.cliInstalled ? "Installed at \(model.cliInstallPath)" : "Not installed")
+        Button(model.cliInstalled ? "Reinstall haken Command" : "Install haken Command") {
+          model.installCLI()
+        }
+        Text(
+          "The installer does not modify your shell configuration. Add ~/.local/bin to PATH if needed."
+        )
+        .font(.caption).foregroundStyle(.secondary)
+        if let message = model.cliInstallMessage { Text(message).font(.caption) }
+      }
       if model.configurationError != nil {
         Section("Configuration recovery") {
           Text(HakenError.configurationCorrupt.userMessage).foregroundStyle(.red)

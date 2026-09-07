@@ -150,6 +150,7 @@ public final class HakenConfigurationStore: @unchecked Sendable {
   }
 
   public var configuration: HakenConfiguration { lock.withLock { storedConfiguration } }
+  public var location: URL { fileURL }
 
   public func update(_ change: (inout HakenConfiguration) -> Void) throws {
     try lock.withLock {

@@ -17,6 +17,11 @@ struct ApplicationDescriptor: Identifiable, Hashable {
 final class ApplicationAdapter: @unchecked Sendable {
   func activate(_ target: ApplicationTarget) -> Result<SwitchOutcome, HakenError> {
     let running = runningApplications(matching: target)
+    if target.lastKnownPath == nil,
+      Set(running.compactMap { $0.bundleURL?.standardizedFileURL }).count > 1
+    {
+      return .failure(.applicationAmbiguous)
+    }
     if frontmostProcessIdentifier().map({ processIdentifier in
       running.contains { $0.processIdentifier == processIdentifier }
     }) == true {
@@ -61,19 +66,58 @@ final class ApplicationAdapter: @unchecked Sendable {
     }
     for root in [
       URL(fileURLWithPath: "/Applications"),
+      URL(fileURLWithPath: "/System/Applications"),
       FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications"),
     ] {
       guard
-        let contents = try? FileManager.default.contentsOfDirectory(
-          at: root, includingPropertiesForKeys: nil)
+        let contents = FileManager.default.enumerator(
+          at: root, includingPropertiesForKeys: nil,
+          options: [.skipsHiddenFiles, .skipsPackageDescendants])
       else { continue }
-      for url in contents where url.pathExtension == "app" {
+      for case let url as URL in contents where url.pathExtension == "app" {
         if let descriptor = descriptor(for: url) { candidates[descriptor.id] = descriptor }
       }
     }
     return candidates.values.sorted {
       $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
     }
+  }
+
+  func resolve(name: String) -> Result<ApplicationDescriptor, HakenError> {
+    let matches = runningAndInstalledApplications().filter {
+      $0.displayName.compare(name, options: [.caseInsensitive, .diacriticInsensitive])
+        == .orderedSame
+    }
+    guard !matches.isEmpty else { return .failure(.applicationNotFound) }
+    guard matches.count == 1, let match = matches.first else {
+      return .failure(.applicationAmbiguous)
+    }
+    return .success(match)
+  }
+
+  func resolve(bundleIdentifier: String) -> Result<ApplicationDescriptor, HakenError> {
+    var matches: [String: ApplicationDescriptor] = [:]
+    for application in onMain({ NSWorkspace.shared.runningApplications })
+    where application.bundleIdentifier == bundleIdentifier {
+      if let descriptor = descriptor(application)?.1 { matches[descriptor.id] = descriptor }
+    }
+    for url in onMain({
+      NSWorkspace.shared.urlsForApplications(withBundleIdentifier: bundleIdentifier)
+    }) {
+      if let descriptor = descriptor(for: url) { matches[descriptor.id] = descriptor }
+    }
+    guard !matches.isEmpty else { return .failure(.applicationNotFound) }
+    guard matches.count == 1, let match = matches.values.first else {
+      return .failure(.applicationAmbiguous)
+    }
+    return .success(match)
+  }
+
+  func resolve(path: String) -> Result<ApplicationDescriptor, HakenError> {
+    guard let descriptor = descriptor(for: URL(fileURLWithPath: path).standardizedFileURL) else {
+      return .failure(.applicationNotFound)
+    }
+    return .success(descriptor)
   }
 
   func descriptor(for url: URL) -> ApplicationDescriptor? {
@@ -116,10 +160,8 @@ final class ApplicationAdapter: @unchecked Sendable {
     }
     guard let path = target.lastKnownPath else { return applications }
     let expectedURL = URL(fileURLWithPath: path).standardizedFileURL
-    return applications.sorted {
-      let leftMatches = $0.bundleURL?.standardizedFileURL == expectedURL
-      let rightMatches = $1.bundleURL?.standardizedFileURL == expectedURL
-      return leftMatches && !rightMatches
+    return applications.filter {
+      $0.bundleURL?.standardizedFileURL == expectedURL
     }
   }
 

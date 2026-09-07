@@ -4,9 +4,9 @@ import HakenCore
 import OSLog
 
 struct ChromeProfileDescriptor: Identifiable, Hashable {
+  let id: Int
   let name: String
   let chromeVersion: String?
-  var id: String { name }
 }
 
 final class ChromeProfileAdapter: @unchecked Sendable {
@@ -18,18 +18,20 @@ final class ChromeProfileAdapter: @unchecked Sendable {
 
   private let permission: AccessibilityPermission
   private let logger: Logger
+  private let operationLock = NSLock()
+  private let cacheLock = NSLock()
   private var cache: [String: CachedItem] = [:]
 
   init(permission: AccessibilityPermission, logger: Logger) {
     self.permission = permission
     self.logger = logger
     NSWorkspace.shared.notificationCenter.addObserver(
-      self, selector: #selector(invalidateCache),
+      self, selector: #selector(applicationLifecycleChanged(_:)),
       name: NSWorkspace.didLaunchApplicationNotification,
       object: nil
     )
     NSWorkspace.shared.notificationCenter.addObserver(
-      self, selector: #selector(invalidateCache),
+      self, selector: #selector(applicationLifecycleChanged(_:)),
       name: NSWorkspace.didTerminateApplicationNotification,
       object: nil
     )
@@ -37,9 +39,20 @@ final class ChromeProfileAdapter: @unchecked Sendable {
 
   deinit { NSWorkspace.shared.notificationCenter.removeObserver(self) }
 
-  @objc func invalidateCache() { cache.removeAll() }
+  @objc private func applicationLifecycleChanged(_ notification: Notification) {
+    guard
+      let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+        as? NSRunningApplication,
+      application.bundleIdentifier == "com.google.Chrome"
+    else { return }
+    cacheLock.withLock { cache.removeAll() }
+  }
 
   func availableProfiles() -> Result<[ChromeProfileDescriptor], HakenError> {
+    operationLock.withLock { discoverProfiles() }
+  }
+
+  private func discoverProfiles() -> Result<[ChromeProfileDescriptor], HakenError> {
     guard permission.isGranted else { return .failure(.accessibilityPermissionRequired) }
     guard let chrome = chromeApplication() else { return .failure(.chromeNotRunning) }
     guard let menuBar = menuBar(for: chrome) else { return .failure(.menuBarUnavailable) }
@@ -49,18 +62,24 @@ final class ChromeProfileAdapter: @unchecked Sendable {
     let version = chromeVersion(chrome)
     logger.info("Chrome profile detection profileCount=\(names.count, privacy: .public)")
     return .success(
-      Array(Set(names)).sorted().map { ChromeProfileDescriptor(name: $0, chromeVersion: version) })
+      names.sorted().enumerated().map {
+        ChromeProfileDescriptor(id: $0.offset, name: $0.element, chromeVersion: version)
+      })
   }
 
   func switchProfile(_ target: ChromeProfileTarget) -> Result<SwitchOutcome, HakenError> {
+    operationLock.withLock { performSwitch(target) }
+  }
+
+  private func performSwitch(_ target: ChromeProfileTarget) -> Result<SwitchOutcome, HakenError> {
     guard permission.isGranted else { return .failure(.accessibilityPermissionRequired) }
     guard let chrome = chromeApplication() else { return .failure(.chromeNotRunning) }
     let version = chromeVersion(chrome)
     let cacheKey = "\(chrome.processIdentifier)|\(version ?? "unknown")|\(target.profileName)"
-    if let cached = cache[cacheKey] {
+    if let cached = cacheLock.withLock({ cache[cacheKey] }) {
       let result = AXUIElementPerformAction(cached.item, kAXPressAction as CFString)
       if result == .success { return .success(.requestAccepted) }
-      cache.removeValue(forKey: cacheKey)
+      _ = cacheLock.withLock { cache.removeValue(forKey: cacheKey) }
     }
     return findAndPress(target.profileName, chrome: chrome, version: version, cacheKey: cacheKey)
   }
@@ -79,7 +98,9 @@ final class ChromeProfileAdapter: @unchecked Sendable {
       logger.error("Chrome AXPress failed code=\(result.rawValue, privacy: .public)")
       return .failure(.pressRejected(result.rawValue))
     }
-    cache[cacheKey] = CachedItem(pid: chrome.processIdentifier, version: version, item: item)
+    cacheLock.withLock {
+      cache[cacheKey] = CachedItem(pid: chrome.processIdentifier, version: version, item: item)
+    }
     return .success(.requestAccepted)
   }
 
