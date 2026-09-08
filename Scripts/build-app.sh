@@ -18,12 +18,13 @@ app_path="$project_dir/.build/app/Haken.app"
 contents="$app_path/Contents"
 
 rm -rf "$app_path"
-mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Resources"
+mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Resources/Skills"
 cp "$binary_path" "$contents/MacOS/Haken"
 cp "$cli_path" "$contents/Helpers/haken"
 cp AppResources/Info.plist "$contents/Info.plist"
 cp AppResources/AppIcon.svg "$contents/Resources/AppIcon.svg"
 cp -R AppResources/AppIcon.iconset "$contents/Resources/AppIcon.iconset"
+cp -R .agents/skills/haken-control "$contents/Resources/Skills/haken-control"
 
 identity="${HAKEN_CODE_SIGN_IDENTITY:-}"
 if [[ -z "$identity" ]]; then

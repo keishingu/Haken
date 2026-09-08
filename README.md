@@ -24,6 +24,15 @@ haken doctor --json
 
 The CLI sends commands to Haken.app over a user-only local socket. It does not edit `configuration.json` or request Accessibility permission itself. Persistent changes require confirmation in a terminal or `--yes` in non-interactive use.
 
+## AI Skill
+
+The repository includes an agent Skill at `.agents/skills/haken-control`, and the app bundles the same Skill at `Contents/Resources/Skills/haken-control`. Codex discovers the repository copy while working in this project. To make an app installed in `/Applications` available user-wide without administrator privileges, link the bundled copy into your agent Skills directory:
+
+```sh
+mkdir -p "$HOME/.agents/skills"
+ln -s "/Applications/Haken.app/Contents/Resources/Skills/haken-control" "$HOME/.agents/skills/haken-control"
+```
+
 ## Secure Input
 
 macOS may withhold Option-only global hot keys while another application holds Secure Event Input. In that state, a shortcut such as `⌥3` can reach the foreground text field as `£` instead of reaching Haken. Move focus out of the secure-input application or quit it; `haken slot activate 3` remains available because it does not depend on keyboard event delivery.
