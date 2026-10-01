@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f4ef">
+  <meta name="description" content="Hakenアプリとこのウェブサイトで扱う情報について説明します。">
+  <title>プライバシー — Haken</title>
+  <link rel="icon" href="./assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="./assets/css/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <header class="site-header wrap">
+    <a class="wordmark" href="./" aria-label="Haken ホーム"><img src="./assets/icon.png" alt="" width="34" height="34"><span>Haken</span></a>
+    <nav aria-label="メインナビゲーション"><a href="./#how">使い方</a><a href="./support.html">サポート</a><a class="header-cta" href="https://github.com/keishingu/Haken">GitHub ↗</a></nav>
+  </header>
+  <main id="main" class="page-main wrap">
+    <div class="page-intro"><p class="eyebrow">PRIVACY</p><h1>プライバシー</h1><p>HakenアプリとHakenウェブサイトで扱う情報について説明します。</p></div>
+    <div class="document-content">
+      <p class="doc-callout"><strong>要点:</strong> Hakenアプリは設定をMac内に保存し、アプリから自動で通信しません。</p>
+      <h2>Hakenアプリ</h2>
+      <h3>Macに保存する情報</h3>
+      <p>Hakenは、スロットの割り当てと設定を <code>~/Library/Application Support/Haken/configuration.json</code> に保存します。割り当てに応じて、アプリ名・識別子・場所、Chromeプロファイル名、ショートカットパターンやその他の設定が含まれます。これらはアプリ切り替え機能のためにMac内に保存されます。</p>
+      <h3>通信と収集</h3>
+      <p>Hakenアプリは設定や利用状況を外部サーバーへ自動送信しません。URL、Chromeのタブ名、キー入力履歴を収集しません。</p>
+      <h3>アクセシビリティ許可</h3>
+      <p>通常のアプリ切り替えにこの許可は必要ありません。Chromeプロファイルの取得と切り替えを使う場合に、Chromeのアクセシビリティ要素を操作するために利用します。</p>
+      <h3>診断情報</h3>
+      <p>Diagnostics画面から利用者がコピーする診断情報には、アプリとmacOSのバージョン、Chromeのバージョン、許可状態、割り当て数、直近の切り替え結果などが含まれます。Chromeプロファイル名、アプリのパス、URL、タブ名、キー入力履歴は含まれません。共有する前に、内容をご自身で確認してください。</p>
+      <h3>コマンドライン</h3>
+      <p>任意のCLIはHakenアプリとユーザー専用のローカルソケットで通信します。CLI自身は設定ファイルを直接変更せず、ネットワーク通信もしません。</p>
+
+      <h2>このウェブサイト</h2>
+      <p>このサイトにはアクセス解析や広告タグを設置していません。サイトの公開に利用するGitHub Pagesなどのホスティング事業者は、サービス運用のため通常のアクセスログを処理する場合があります。その取り扱いは各事業者の方針に従います。</p>
+      <p>GitHubへのリンクを開いた後は、GitHubのプライバシー方針が適用されます。問い合わせ時にGitHubへ送る情報は、送信前にご自身で確認してください。</p>
+
+      <h2>お問い合わせ</h2>
+      <p>プライバシーに関するお問い合わせは、<a href="https://github.com/keishingu/Haken/issues">GitHub Issues</a>からお送りください。Issueは公開されるため、個人情報や秘密情報を含めないでください。</p>
+      <p>この説明は、アプリや配布方法の変更に応じて更新する場合があります。</p>
+      <p><a href="./support.html">サポートページへ</a></p>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap footer-row"><a class="footer-brand" href="./">Haken</a><nav aria-label="フッターナビゲーション"><a href="./support.html">サポート</a><a href="./privacy.html">プライバシー</a><a href="https://github.com/keishingu/Haken">GitHub ↗</a></nav><small>© Haken</small></div></footer>
+</body>
+</html>

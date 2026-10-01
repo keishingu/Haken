@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f4ef">
+  <meta name="description" content="Hakenの使い方、動作環境、ショートカット、よくある質問をご案内します。">
+  <title>サポート — Haken</title>
+  <link rel="icon" href="./assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="./assets/css/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <header class="site-header wrap">
+    <a class="wordmark" href="./" aria-label="Haken ホーム"><img src="./assets/icon.png" alt="" width="34" height="34"><span>Haken</span></a>
+    <nav aria-label="メインナビゲーション"><a href="./#how">使い方</a><a href="./privacy.html">プライバシー</a><a class="header-cta" href="https://github.com/keishingu/Haken/issues">GitHubで問い合わせる ↗</a></nav>
+  </header>
+  <main id="main" class="page-main wrap">
+    <div class="page-intro"><p class="eyebrow">SUPPORT / GUIDE</p><h1>使い方とサポート</h1><p>Hakenは現在、配布準備中です。公開後の導入方法もこのページに掲載します。</p><div class="doc-nav"><a href="#start">基本の使い方 ↓</a><a href="#command-line">コマンドライン ↓</a><a href="#trouble">困ったとき ↓</a></div></div>
+    <div class="document-content">
+      <p class="doc-callout"><strong>動作環境:</strong> macOS 15以降。ダウンロード可能な公開版はまだありません。</p>
+      <h2 id="start">基本の使い方</h2>
+      <ol>
+        <li>Hakenを起動し、<strong>Slots</strong>でスロットを選びます。</li>
+        <li><strong>Choose…</strong>から<strong>Application</strong>または<strong>Google Chrome Profile</strong>を選びます。</li>
+        <li>スロットの<strong>Test</strong>で動作を確認します。その後、割り当てたショートカットを押します。</li>
+      </ol>
+      <p>番号キーは1〜9と0の10個です。<strong>Settings → Shortcut keys</strong>で、全スロットに適用するパターンを選びます。</p>
+      <ul>
+        <li>⌥ + Number keys（⌥1〜⌥0）</li>
+        <li>⌥ + Function keys（⌥F1〜⌥F10）</li>
+        <li>⌘ + Number keys（⌘1〜⌘0）</li>
+        <li>⌘ + Function keys（⌘F1〜⌘F10）</li>
+        <li>Function keys（F1〜F10）</li>
+      </ul>
+      <p>割り当てたスロットのショートカットはHaken用に予約されます。空のスロットは前面のアプリで通常どおり使えます。</p>
+
+      <h2 id="chrome">Chromeプロファイル</h2>
+      <p>Google Chromeを起動してから、Slots画面でアクセシビリティ未許可なら<strong>Enable Chrome Profiles…</strong>を選び、macOSのSystem SettingsでHakenを許可してください。許可後に<strong>Refresh Chrome Profiles</strong>を選ぶと、登録できるプロファイルが表示されます。HakenはChromeのメニューバーにあるプロファイル切り替え項目を操作します。</p>
+      <p>許可を使うのはChromeプロファイルの取得と切り替えです。通常のアプリ切り替えにはアクセシビリティ許可は必要ありません。Chromeのウィンドウが別のデスクトップやフルスクリーンにある場合、切り替え後の最終的な配置まではHakenが確認できないことがあります。</p>
+
+      <h3>HUDで割り当てを確認する</h3>
+      <p><strong>Settings → Switch feedback → HUD</strong>を選ぶと、⌥または⌘を長押ししたときに割り当てを表示できます。修飾キーを使わないFunction keysパターンでは表示されません。</p>
+
+      <h2 id="install">配布後のインストール</h2>
+      <p>公開後はリリースからmacOS用DMGを取得し、ディスクイメージを開いてHakenをアプリケーションフォルダへ移動する手順をここに掲載します。現時点では公開バイナリがないため、インストール操作はできません。</p>
+      <p>アップデートは自動では行われません。新しい版をリリースページで確認し、手動で更新してください。</p>
+
+      <h2 id="command-line">コマンドライン（任意）</h2>
+      <p>アプリの<strong>Settings → Command Line → Install haken Command</strong>から、アプリに同梱されたコマンドへのリンクを <code>~/.local/bin/haken</code> に作成します。シェル設定は変更しません。コマンドを使うには <code>~/.local/bin</code> がPATHに含まれている必要があります。</p>
+      <pre><code>haken slot list
+haken slot activate 2
+haken chrome profiles --json
+haken doctor --json</code></pre>
+      <p>CLIはHakenアプリとユーザー専用のローカルソケットで通信します。スロットへの永続的な変更には確認が必要です。</p>
+
+      <h2 id="trouble">困ったとき</h2>
+      <h3>キーを押しても切り替わらず、文字が入力されます</h3>
+      <p>パスワード欄などでmacOSのSecure Inputが有効になると、OptionのみのグローバルショートカットがHakenに届かない場合があります。入力欄からフォーカスを移すか、そのアプリを終了して再度お試しください。CLIが利用できる場合は <code>haken slot activate 2</code> のように直接切り替えられます。</p>
+      <h3>Chromeプロファイルを取得できません</h3>
+      <p>Chromeを起動してください。アクセシビリティ未許可なら<strong>Enable Chrome Profiles…</strong>を選び、macOSの<strong>System Settings → Privacy &amp; Security → Accessibility</strong>でHakenを許可して戻ります。許可済みの場合は<strong>Refresh Chrome Profiles</strong>を実行してください。</p>
+      <h3>問い合わせに診断情報を添えたい</h3>
+      <p><strong>Diagnostics → Copy Diagnostics</strong>でコピーできます。この診断情報にはChromeプロファイル名、アプリのパス、URL、タブ名、キー入力履歴は含まれません。GitHubのIssueでお問い合わせください。公開Issueには個人情報を記載しないでください。</p>
+      <p><a href="https://github.com/keishingu/Haken/issues">GitHub Issuesで問い合わせる ↗</a></p>
+      <p><a href="./privacy.html">プライバシーについて</a></p>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap footer-row"><a class="footer-brand" href="./">Haken</a><nav aria-label="フッターナビゲーション"><a href="./support.html">サポート</a><a href="./privacy.html">プライバシー</a><a href="https://github.com/keishingu/Haken">GitHub ↗</a></nav><small>© Haken</small></div></footer>
+</body>
+</html>

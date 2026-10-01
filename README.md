@@ -9,6 +9,19 @@ open '.build/app/Haken.app'
 
 The application writes versioned configuration to `~/Library/Application Support/Haken/configuration.json`. A malformed existing file is never silently overwritten; the Settings screen offers an explicit reset after explaining this.
 
+## Distribution and website
+
+The direct-distribution pipeline builds both the app and bundled CLI for Apple Silicon and Intel, signs with Developer ID, and notarizes a drag-and-drop DMG. See [distribution setup and release checks](docs/apple-distribution.md) for the required Apple credentials and manual GitHub Actions workflow. Publishing is off by default. No public binary release is available yet.
+
+The Japanese landing page, support guide, and privacy page live in `docs/site/`, with no frontend dependencies or build step. Preview locally:
+
+```sh
+python3 Scripts/verify-site.py
+python3 -m http.server 8766 --bind 127.0.0.1 --directory docs/site
+```
+
+Open <http://127.0.0.1:8766/>. GitHub Pages deployment is a separate, manual **Publish Haken website** workflow on `main`; first select **GitHub Actions** in repository **Settings → Pages → Source**. Keep the pre-release CTA until a signed, notarized release has been verified. Release activation instructions are in the distribution guide.
+
 ## Command line
 
 The app bundle includes `Contents/Helpers/haken`. Install a symlink from **Settings → Command Line**, then ensure `~/.local/bin` is in `PATH`.
