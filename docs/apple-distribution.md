@@ -38,7 +38,7 @@ WorkflowはアプリとCLIをarm64・x86_64でビルドし、CLIを先にDevelop
 
 ## ローカルビルド
 
-Developer ID証明書のあるMacで実行します。
+Xcode 26.3とDeveloper ID証明書のあるMacで実行します。アプリの最低対応OSはmacOS 15ですが、macOS 26向けHUD APIもコンパイルするため新しいSDKが必要です。CIの検証・配布workflowは両方ともXcode 26.3を明示指定します。
 
 ```sh
 BUILD_NUMBER=1 \
