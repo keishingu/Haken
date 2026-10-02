@@ -1,0 +1,20 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run release input smoke checks
+        run: python3 Scripts/smoke-direct-release.py
+      - name: Verify the static site
+        run: python3 Scripts/verify-site.py
+      - name: Run project verification
+        run: Scripts/verify.sh
